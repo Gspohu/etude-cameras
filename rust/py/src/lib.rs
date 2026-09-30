@@ -97,6 +97,12 @@ fn analyser(requete_json: &str) -> PyResult<Analyse>
 
 
 #[pyfunction]
+fn mention(statut: &str) -> Option<String>
+{
+    return champ_core::modele::mention_statut(statut).map(|m| m.to_string());
+}
+
+#[pyfunction]
 fn niveaux_dori() -> Vec<(String, String, f64)>
 {
     return NIVEAUX_DORI.iter().map(|n| (n.0.to_string(), n.1.to_string(), n.2)).collect();
@@ -113,5 +119,6 @@ fn champ_rs(m: &Bound<'_, PyModule>) -> PyResult<()>
     m.add_function(wrap_pyfunction!(diagnostiquer, m)?)?;
     m.add_function(wrap_pyfunction!(verifier, m)?)?;
     m.add_function(wrap_pyfunction!(niveaux_dori, m)?)?;
+    m.add_function(wrap_pyfunction!(mention, m)?)?;
     return Ok(());
 }

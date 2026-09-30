@@ -1,100 +1,60 @@
-# Example site, EVERY dimension here is invented to exercise the engine
-# Replace them with surveyed ones and set statut to "releve"
+# Parcelle AN 164, Séné (56), relevée sur le plan de masse coté DP2 au 1/200
 #
-# Axes : x toward the east, y toward the north, metres
-# azimut : degrees clockwise from +y (0 north, 90 east, 180 south)
-# inclinaison : degrees below the horizon
-# hauteur : metres above the ground
+# Les quatre limites portent leurs cotes sur le plan : 26,8 m au nord, 15,6 m à
+# l'est, 10,3 m au sud-est, 27,7 m au sud-ouest. Le polygone ci-dessous les
+# restitue à moins de 40 cm, ce qui est la limite d'une lecture sur capture
+# d'écran, d'où le statut. Le projet, lui, est posé sur ses propres cotes.
+#
+# Axes : x vers l'est, y vers le nord, métres. Origine au coin ouest de la
+# parcelle pour x, au coin sud pour y
+# azimut : degrés horaires depuis +y (0 nord, 90 est, 180 sud)
 
-nom: Exemple
-statut: arbitraire
-hauteur_cible: 1.6   # face height, the point DORI is judged on
+nom: Séné AN 164
+statut: plan
+hauteur_cible: 1.6
 pas: 0.1
 
-limite: [[0, 0], [28, 0], [28, 24], [0, 24]]
+limite: [[0.00, 19.97], [26.72, 20.83], [28.02, 5.66], [19.70, 0.00]]
 
-# types : batiment (closed, excluded from the watched area), mur, haie, cloture
-# cloture is see-through by default, override with opaque: true
 obstacles:
-  - nom: la maison
+  # Le projet : toit terrasse, acrotère à 16,18 NGF pour un terrain à 12,85
+  - nom: le projet
+    type: batiment
+    hauteur: 3.33
+    points: [[10.98, 20.61], [17.43, 20.61], [17.43, 12.25],
+             [13.04, 12.25], [13.04, 16.00], [10.98, 16.00]]
+
+  # Le plan ne donne aucune hauteur pour l'existant : 6 m est une supposition,
+  # à remplacer par la cote réelle. Emprise simplifiée en un rectangle
+  - nom: la maison existante
     type: batiment
     hauteur: 6.0
-    points: [[9, 8], [21, 8], [21, 17], [9, 17]]
-
-  - nom: le garage
-    type: batiment
-    hauteur: 3.0
-    points: [[22, 10], [27, 10], [27, 16], [22, 16]]
-
-  - nom: l'abri de jardin
-    type: batiment
-    hauteur: 2.3
-    points: [[1, 19], [4, 19], [4, 22], [1, 22]]
-
-  - nom: le muret ouest
-    type: mur
-    hauteur: 1.0
-    points: [[0, 0], [4, 0]]
-
-  - nom: le muret est
-    type: mur
-    hauteur: 1.0
-    points: [[7.5, 0], [28, 0]]
-
-  - nom: la haie est
-    type: haie
-    hauteur: 1.8
-    points: [[28, 0], [28, 24]]
-
-  - nom: le bosquet
-    type: haie
-    hauteur: 2.5
-    ferme: true
-    points: [[12, 19.5], [15, 19.5], [15.5, 22.5], [12.5, 22.5]]
-
-  # base : underside of the obstacle, one walks under a canopy
-  - nom: le tilleul
-    type: haie
-    hauteur: 7.0
-    base: 2.5
-    ferme: true
-    points: [[5, 12], [8, 12], [8, 15], [5, 15]]
-
-  - nom: la clôture nord
-    type: cloture
-    hauteur: 1.5
-    points: [[0, 24], [28, 24]]
+    points: [[17.43, 20.83], [23.65, 20.83], [23.65, 7.07], [17.43, 7.07]]
 
 cameras:
-  - nom: entree
+  # Les deux vue du plan sont les points de prise de vue du dossier
+  # d'urbanisme, pas des points de fixation. Ces deux poses sont une
+  # proposition, sur les façades, conformément au raccordement PoE de l'étude
+  - nom: acces
     modele: dahua-2441-28
-    position: [21.2, 7.85]
+    position: [23.90, 15.40]
     hauteur: 2.8
-    azimut: 235
-    inclinaison: 15
+    azimut: 40
+    inclinaison: 12
 
   - nom: jardin
     modele: dahua-2441-28
-    position: [20.8, 17.15]
+    position: [10.75, 20.20]
     hauteur: 2.8
-    azimut: 300
+    azimut: 220
     inclinaison: 12
 
-# requis : detecter, observer, reconnaitre or identifier
-# hauteur is optional and falls back on hauteur_cible
 points_passage:
-  - nom: portail
-    position: [5.75, 0.5]
+  # L'accès est porté sur le plan, au nord-est
+  - nom: acces
+    position: [24.74, 19.53]
     requis: identifier
 
-  - nom: porte d'entrée
-    position: [13, 7.4]
-    requis: reconnaitre
-
-  - nom: porte du garage
-    position: [24.5, 9.5]
+  - nom: fond de parcelle
+    position: [19.00, 2.50]
     requis: detecter
-
-  - nom: abri
-    position: [4.5, 20.5]
-    requis: observer

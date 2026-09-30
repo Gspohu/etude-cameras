@@ -178,10 +178,11 @@ fn plan_exemple_se_charge() -> Essai
     let plan = charger_plan(PLAN, &cat, "exemple")?;
     assert!(plan.cotes_arbitraires());
     assert_eq!(plan.cameras.len(), 2);
-    assert_eq!(plan.points.len(), 4);
+    assert_eq!(plan.points.len(), 2);
     let couv = calculer(&plan, &cat, None, false, None)?;
     let st = statistiques(&couv);
-    assert!((st.surface_m2 - 525.0).abs() < 1.0, "surface {}", st.surface_m2);
+    // la parcelle fait environ 350 m2, moins le projet et la maison existante
+    assert!((st.surface_m2 - 213.0).abs() < 2.0, "surface {}", st.surface_m2);
     return Ok(());
 }
 

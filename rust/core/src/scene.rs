@@ -120,16 +120,15 @@ impl Plan
     }
 
 
+    // The ground the grid covers, cameras excluded on purpose : moving one must
+    // not resize the grid, otherwise two runs cannot be compared cell by cell
+    // and the map jumps under a dragged camera
     pub fn emprise(&self, marge: f64) -> (f64, f64, f64, f64)
     {
         let mut pts: Vec<[f64; 2]> = self.limite.clone();
         for ob in &self.obstacles
         {
             pts.extend(ob.points.iter());
-        } 
-        for c in &self.cameras
-        {
-            pts.push([c.x, c.y]);
         }
         let mut x0 = f64::INFINITY;
         let mut x1 = f64::NEG_INFINITY;

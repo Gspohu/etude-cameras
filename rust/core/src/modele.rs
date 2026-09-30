@@ -28,6 +28,22 @@ pub fn index_niveau(cle: &str) -> Result<u8, String>
 }
 
 
+// What a map has to say about the dimensions it draws, one wording for every
+// interface : nothing on surveyed ground, a warning otherwise
+pub fn mention_statut(statut: &str) -> Option<&'static str>
+{
+    if (statut == "releve")
+    {
+        return None;
+    }
+    if (statut == "arbitraire")
+    {
+        return Some("COTES ARBITRAIRES");
+    }
+    return Some("COTES ESTIMEES");
+}
+
+
 pub fn libelle_niveau(index: u8) -> &'static str
 {
     if (index == 0)

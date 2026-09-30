@@ -96,6 +96,7 @@ pub struct Resume
     pub pas: f64,
     pub nuit: bool,
     pub hauteur_cible: f64,
+    pub mention: Option<String>,
 }
 
 
@@ -116,6 +117,7 @@ pub fn analyser(requete_json: &str) -> Result<Analyse, String>
         verdicts: verifier_points(&r.plan, &r.catalogue, r.nuit)?,
         x0: couv.x0, y0: couv.y0, nx: couv.nx, ny: couv.ny, pas: couv.pas,
         nuit: couv.nuit, hauteur_cible: couv.hauteur_cible,
+        mention: crate::modele::mention_statut(&r.plan.statut).map(|m| m.to_string()),
     };
     return Ok(Analyse { couverture: couv, resume });
 }
