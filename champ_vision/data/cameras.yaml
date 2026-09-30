@@ -1,0 +1,101 @@
+# Camera catalogue, fields of view and IR ranges read on the manufacturer datasheets
+# on 2026-09-22, prices from the study (2026-08-06)
+# largeur_px / hauteur_px : main stream definition, hfov / vfov : horizontal and vertical field in degrees
+
+dahua-2441-28:
+  nom: Dahua IPC-HFW2441S-S 2,8 mm
+  focale_mm: 2.8
+  largeur_px: 2688
+  hauteur_px: 1520
+  hfov: 95
+  vfov: 52
+  portee_ir_m: 30
+  prix_eur: 91.28
+  verifie: true
+  source: "Fiche Dahua DH-IPC-HFW2441S-S, https://material.dahuasecurity.com/uploads/cpq/prm-os-srv-res/smart/datasheetzipfiles/IPC-HFW2441S-S_datasheet_20221114.pdf"
+
+dahua-2441-36:
+  nom: Dahua IPC-HFW2441S-S 3,6 mm
+  focale_mm: 3.6
+  largeur_px: 2688
+  hauteur_px: 1520
+  hfov: 78
+  vfov: 41
+  portee_ir_m: 30
+  prix_eur: 91.28
+  verifie: true
+  source: "Fiche Dahua DH-IPC-HFW2441S-S, https://material.dahuasecurity.com/uploads/cpq/prm-os-srv-res/smart/datasheetzipfiles/IPC-HFW2441S-S_datasheet_20221114.pdf"
+
+reolink-520a:
+  nom: Reolink RLC-520A
+  focale_mm: 4.0
+  largeur_px: 2560
+  hauteur_px: 1920
+  hfov: 80
+  vfov: 48
+  portee_ir_m: 30
+  prix_eur: 47.99
+  verifie: true
+  source: "https://reolink.com/product/rlc-520a/"
+
+reolink-820a:
+  nom: Reolink RLC-820A
+  focale_mm: 4.0
+  largeur_px: 3840
+  hauteur_px: 2160
+  hfov: 87
+  vfov: 44
+  portee_ir_m: 30
+  prix_eur: 94.99
+  verifie: true
+  source: "https://reolink.com/product/rlc-820a/"
+
+reolink-810wa:
+  nom: Reolink RLC-810WA
+  focale_mm: null
+  largeur_px: 3840
+  hauteur_px: 2160
+  hfov: 88.8
+  vfov: 45.2
+  portee_ir_m: 30
+  prix_eur: 99.99
+  verifie: true
+  source: "https://reolink.com/product/rlc-810wa/"
+
+tapo-c320ws:
+  nom: Tapo C320WS V2.2
+  focale_mm: 3.18
+  largeur_px: 2560
+  hauteur_px: 1440
+  hfov: 97
+  vfov: 54
+  portee_ir_m: 30
+  prix_eur: 51.69
+  verifie: true
+  source: "https://www.tp-link.com/en/home-networking/cloud-camera/tapo-c320ws/#specifications"
+
+# No IR range published for this one, night mode leaves its field unclipped
+tapo-c325wb:
+  nom: Tapo C325WB V2
+  focale_mm: 4.1
+  largeur_px: 2560
+  hauteur_px: 1440
+  hfov: 106
+  vfov: 56
+  portee_ir_m: null
+  prix_eur: 69.99
+  verifie: true
+  source: "https://www.tp-link.com/en/home-networking/cloud-camera/tapo-c325wb/#specifications"
+
+# TODO official Hikvision datasheet unreachable (bot wall), values from third party summaries only
+hikvision-2043g2-28:
+  nom: Hikvision DS-2CD2043G2-I 2,8 mm
+  focale_mm: 2.8
+  largeur_px: 2688
+  hauteur_px: 1520
+  hfov: 103
+  vfov: 55
+  portee_ir_m: 40
+  prix_eur: 153
+  verifie: false
+  source: "Résumés tiers, fiche officielle non consultée"

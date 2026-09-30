@@ -1,0 +1,100 @@
+# Example site, EVERY dimension here is invented to exercise the engine
+# Replace them with surveyed ones and set statut to "releve"
+#
+# Axes : x toward the east, y toward the north, metres
+# azimut : degrees clockwise from +y (0 north, 90 east, 180 south)
+# inclinaison : degrees below the horizon
+# hauteur : metres above the ground
+
+nom: Exemple
+statut: arbitraire
+hauteur_cible: 1.6   # face height, the point DORI is judged on
+pas: 0.1
+
+limite: [[0, 0], [28, 0], [28, 24], [0, 24]]
+
+# types : batiment (closed, excluded from the watched area), mur, haie, cloture
+# cloture is see-through by default, override with opaque: true
+obstacles:
+  - nom: la maison
+    type: batiment
+    hauteur: 6.0
+    points: [[9, 8], [21, 8], [21, 17], [9, 17]]
+
+  - nom: le garage
+    type: batiment
+    hauteur: 3.0
+    points: [[22, 10], [27, 10], [27, 16], [22, 16]]
+
+  - nom: l'abri de jardin
+    type: batiment
+    hauteur: 2.3
+    points: [[1, 19], [4, 19], [4, 22], [1, 22]]
+
+  - nom: le muret ouest
+    type: mur
+    hauteur: 1.0
+    points: [[0, 0], [4, 0]]
+
+  - nom: le muret est
+    type: mur
+    hauteur: 1.0
+    points: [[7.5, 0], [28, 0]]
+
+  - nom: la haie est
+    type: haie
+    hauteur: 1.8
+    points: [[28, 0], [28, 24]]
+
+  - nom: le bosquet
+    type: haie
+    hauteur: 2.5
+    ferme: true
+    points: [[12, 19.5], [15, 19.5], [15.5, 22.5], [12.5, 22.5]]
+
+  # base : underside of the obstacle, one walks under a canopy
+  - nom: le tilleul
+    type: haie
+    hauteur: 7.0
+    base: 2.5
+    ferme: true
+    points: [[5, 12], [8, 12], [8, 15], [5, 15]]
+
+  - nom: la clôture nord
+    type: cloture
+    hauteur: 1.5
+    points: [[0, 24], [28, 24]]
+
+cameras:
+  - nom: entree
+    modele: dahua-2441-28
+    position: [21.2, 7.85]
+    hauteur: 2.8
+    azimut: 235
+    inclinaison: 15
+
+  - nom: jardin
+    modele: dahua-2441-28
+    position: [20.8, 17.15]
+    hauteur: 2.8
+    azimut: 300
+    inclinaison: 12
+
+# requis : detecter, observer, reconnaitre or identifier
+# hauteur is optional and falls back on hauteur_cible
+points_passage:
+  - nom: portail
+    position: [5.75, 0.5]
+    requis: identifier
+
+  - nom: porte d'entrée
+    position: [13, 7.4]
+    requis: reconnaitre
+
+  - nom: porte du garage
+    position: [24.5, 9.5]
+    requis: detecter
+
+  - nom: abri
+    position: [4.5, 20.5]
+    requis: observer
