@@ -1,0 +1,77 @@
+# Builds the WebAssembly engine and publishes the web/ folder on GitHub Pages
+# Enable it once in Settings, Pages, Source : GitHub Actions
+
+name: page
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  construire:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - name: Chaine Rust
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/bin
+            rust/target
+          key: cargo-${{ hashFiles('rust/Cargo.lock') }}
+
+      - name: wasm-pack
+        run: command -v wasm-pack || cargo install wasm-pack --locked
+
+      - name: Essais du coeur
+        run: cargo test -p champ_core
+        working-directory: rust
+
+      - name: Module web
+        run: |
+          wasm-pack build wasm --release --target web --out-dir ../../web/pkg --out-name champ
+          rm -f ../web/pkg/.gitignore ../web/pkg/package.json
+          touch ../web/.nojekyll
+        working-directory: rust
+
+      - name: Essais de la page
+        run: |
+          python3 -m http.server 8000 --directory web &
+          sleep 2
+          google-chrome --headless=new --no-sandbox --disable-gpu \
+              --virtual-time-budget=20000 --dump-dom http://localhost:8000/essais.html > sortie.html
+          grep -o 'BILAN [0-9]*/[0-9]*' sortie.html
+          grep -q 'RATE' sortie.html && exit 1 || true
+
+      - uses: actions/configure-pages@v6.0.0
+
+      # hidden files are skipped by default, and .nojekyll is one of them
+      - uses: actions/upload-pages-artifact@v5.0.0
+        with:
+          path: web
+          include-hidden-files: true
+
+  publier:
+    needs: construire
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploiement.outputs.page_url }}
+    steps:
+      - id: deploiement
+        uses: actions/deploy-pages@v5.0.1

@@ -1,0 +1,37 @@
+# Builds the WebAssembly engine and publishes the page on GitLab Pages
+
+stages: [construire, publier]
+
+variables:
+  CARGO_HOME: $CI_PROJECT_DIR/.cargo
+
+cache:
+  key: cargo
+  paths:
+    - .cargo/registry
+    - .cargo/bin
+    - rust/target
+
+essais:
+  stage: construire
+  image: rust:latest
+  script:
+    - cd rust && cargo test -p champ_core
+
+create-pages:
+  stage: publier
+  image: rust:latest
+  script:
+    - rustup target add wasm32-unknown-unknown
+    - command -v wasm-pack || cargo install wasm-pack --locked
+    - cd rust
+    - wasm-pack build wasm --release --target web --out-dir ../../web/pkg --out-name champ
+    - cd ..
+    - rm -f web/pkg/.gitignore web/pkg/package.json
+    # the dot copies the hidden files too
+    - mkdir -p public && cp -r web/. public/
+  pages: true
+  artifacts:
+    paths: [public]
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
