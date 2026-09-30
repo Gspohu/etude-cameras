@@ -99,3 +99,68 @@ hikvision-2043g2-28:
   prix_eur: 153
   verifie: false
   source: "Résumés tiers, fiche officielle non consultée"
+
+# Ajouts du 2026-10-01, tous PoE comme le raccordement retenu par l'étude, prix
+# relevés ce jour-là. Les deux objectifs de 6 mm sont les premiers du catalogue
+# à descendre sous 78 degrés, leur portée Identifier est bien plus longue
+
+annke-c500:
+  nom: Annke C500 2,8 mm
+  focale_mm: 2.8
+  largeur_px: 2560
+  hauteur_px: 1920
+  hfov: 98
+  vfov: 53
+  portee_ir_m: 30
+  prix_eur: 49.99
+  verifie: true
+  source: "Fiche Annke C500 modèle I51DM, https://fr.annke.com/products/c500"
+
+ezviz-h5-poe-4:
+  nom: Ezviz H5 PoE 2K 4 mm
+  focale_mm: 4.0
+  largeur_px: 2304
+  hauteur_px: 1296
+  hfov: 86
+  vfov: 46
+  portee_ir_m: 30
+  prix_eur: 54.99
+  verifie: true
+  source: "https://www.ezviz.com/product/h5-poe-2k/60137"
+
+ezviz-h5-poe-6:
+  nom: Ezviz H5 PoE 2K 6 mm
+  focale_mm: 6.0
+  largeur_px: 2304
+  hauteur_px: 1296
+  hfov: 52
+  vfov: 28
+  portee_ir_m: 30
+  prix_eur: 54.99
+  verifie: true
+  source: "https://www.ezviz.com/product/h5-poe-2k/60137"
+
+# Mêmes réserves que la 2,8 mm ci-dessus : la fiche officielle reste inaccessible
+hikvision-2043g2-4:
+  nom: Hikvision DS-2CD2043G2-I 4 mm
+  focale_mm: 4.0
+  largeur_px: 2688
+  hauteur_px: 1520
+  hfov: 84
+  vfov: 45
+  portee_ir_m: 40
+  prix_eur: 158.75
+  verifie: false
+  source: "Résumés tiers, fiche officielle non consultée"
+
+hikvision-2043g2-6:
+  nom: Hikvision DS-2CD2043G2-I 6 mm
+  focale_mm: 6.0
+  largeur_px: 2688
+  hauteur_px: 1520
+  hfov: 52
+  vfov: 28
+  portee_ir_m: 40
+  prix_eur: 158.75
+  verifie: false
+  source: "Résumés tiers, fiche officielle non consultée"
