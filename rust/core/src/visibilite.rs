@@ -108,10 +108,15 @@ pub struct Couverture
     pub nuit: bool,
     pub hauteur_cible: f64,
     pub utile: Vec<u8>,
+    // ground beyond the boundary : the public way and the neighbours, which a
+    // private camera has no right to film
+    pub dehors: Vec<u8>,
     // one layer per camera, row major, 0 where the target is not visible
     pub rho: Vec<f64>,
     pub niveau: Vec<u8>,
     pub nb_cameras: Vec<u8>,
+    // ground past the boundary that at least one camera catches
+    pub debordement: Vec<u8>,
 }
 
 
@@ -138,7 +143,9 @@ pub fn calculer(plan: &Plan, catalogue: &HashMap<String, ModeleCamera>, pas: Opt
         return Err(format!("pas de grille {} m, il doit être positif", pas));
     }
     let ht = hauteur_cible.unwrap_or(plan.hauteur_cible);
-    let (bx0, bx1, by0, by1) = plan.emprise(1.0);
+    // the grid reaches past the boundary : what a camera catches out there is
+    // what the law forbids, and it has to be measured to be reported
+    let (bx0, bx1, by0, by1) = plan.emprise(plan.marge_hors.max(1.0));
     let nx = (((bx1 - bx0 - pas / 2.0) / pas).ceil() as i64).max(0) as usize;
     let ny = (((by1 - by0 - pas / 2.0) / pas).ceil() as i64).max(0) as usize;
     let (x0, y0) = (bx0 + pas / 2.0, by0 + pas / 2.0);
@@ -146,13 +153,16 @@ pub fn calculer(plan: &Plan, catalogue: &HashMap<String, ModeleCamera>, pas: Opt
 
 
     let mut utile = vec![0u8; nx * ny];
+    let mut dehors = vec![0u8; nx * ny];
     for j in 0..ny
     {
         let py = y0 + j as f64 * pas;
         for i in 0..nx
         {
             let px = x0 + i as f64 * pas;
-            let mut dedans = dans_polygone(px, py, &plan.limite);
+            let dans_limite = dans_polygone(px, py, &plan.limite);
+            dehors[j * nx + i] = (!dans_limite) as u8;
+            let mut dedans = dans_limite;
             if dedans
             {
                 for ob in &plan.obstacles
@@ -181,20 +191,26 @@ pub fn calculer(plan: &Plan, catalogue: &HashMap<String, ModeleCamera>, pas: Opt
             for i in 0..nx
             {
                 let cellule = j * nx + i;
-                if (utile[cellule] == 0)
+                if (utile[cellule] == 0 && dehors[cellule] == 0)
                 {
                     continue;
                 }
                 let px = x0 + i as f64 * pas;
-                rho[k * nx * ny + cellule] = densite_point(modele, pose, px, py, ht, &segs, nuit); 
+                rho[k * nx * ny + cellule] = densite_point(modele, pose, px, py, ht, &segs, nuit);
             }
         }
     }
 
     let mut niveaux = vec![0u8; nx * ny];
-    let mut nb = vec![0u8; nx * ny];   
+    let mut nb = vec![0u8; nx * ny];
+    let mut deborde = vec![0u8; nx * ny];
     for cellule in 0..nx * ny
     {
+        if (dehors[cellule] == 1)
+        {
+            let vu = (0..plan.cameras.len()).any(|k| rho[k * nx * ny + cellule] > 0.0);
+            deborde[cellule] = vu as u8;
+        }
         if (utile[cellule] == 0)
         {
             continue;
@@ -214,8 +230,8 @@ pub fn calculer(plan: &Plan, catalogue: &HashMap<String, ModeleCamera>, pas: Opt
         nb[cellule] = compte;
     }
 
-    return Ok(Couverture { x0, y0, nx, ny, pas, nuit, hauteur_cible: ht, utile, rho,
-                           niveau: niveaux, nb_cameras: nb });
+    return Ok(Couverture { x0, y0, nx, ny, pas, nuit, hauteur_cible: ht, utile, dehors, rho,
+                           niveau: niveaux, nb_cameras: nb, debordement: deborde });
 }
 
 

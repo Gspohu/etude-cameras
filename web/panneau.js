@@ -126,6 +126,19 @@ export function options(id, valeurs, libelle)
 }
 
 
+export function conformite(liste)
+{
+    const lot = document.createDocumentFragment();
+    liste.forEach((c) =>
+    {
+        const tr = rang([c.camera, `${c.debordement_m2.toFixed(1)} m²`,
+                         c.conforme ? "conforme" : "NON CONFORME"]);
+        tr.className = c.conforme ? "" : "manque";
+        lot.append(tr);
+    });
+    vider("conformite").append(lot);
+}
+
 export function comparaison(rangs)
 {
     vider("comparaison").append(...rangs);

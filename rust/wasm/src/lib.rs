@@ -43,6 +43,16 @@ impl Analyse
     {
         return self.interne.couverture.nb_cameras.clone();
     }
+
+    pub fn dehors(&self) -> Vec<u8>
+    {
+        return self.interne.couverture.dehors.clone();
+    }
+
+    pub fn debordement(&self) -> Vec<u8>
+    {
+        return self.interne.couverture.debordement.clone();
+    }
 }
 
 #[wasm_bindgen]
@@ -51,6 +61,12 @@ pub fn charger_catalogue(texte: &str) -> Result<String, JsError>
     let catalogue = chargement::charger_catalogue(texte).map_err(|e| JsError::new(&e))?;
     return serde_json::to_string(&pont::exposer_catalogue(&catalogue))
         .map_err(|e| JsError::new(&e.to_string()));
+}
+
+#[wasm_bindgen]
+pub fn placer(requete_json: &str) -> Result<String, JsError>
+{
+    return pont::placer_json(requete_json).map_err(|e| JsError::new(&e));
 }
 
 #[wasm_bindgen]

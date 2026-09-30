@@ -12,7 +12,7 @@ from matplotlib.lines import Line2D
 from matplotlib.patches import Patch, Polygon
 
 from ..moteur import NIVEAUX_DORI, libelle_niveau
-from .tokens import COULEURS_DORI, POLICE, THEMES
+from .tokens import COULEURS_DORI, DANGER, POLICE, THEMES
 
 matplotlib.rcParams["font.family"] = "sans-serif"
 matplotlib.rcParams["font.sans-serif"] = [f for f in POLICE if not f.startswith("-")]
@@ -109,7 +109,9 @@ def legende(ax, theme, nuit=False, ancre=(1.01, 1.0)):
     elements = [Patch(facecolor=to_rgba(c, ALPHA_ZONES), edgecolor="none",
                       label=f"{n[1]}, {n[2]:g} px/m") for c, n in zip(COULEURS_DORI, NIVEAUX_DORI)]
     elements += [Line2D([], [], marker="D", linestyle="", color=COULEURS_DORI[1], label="point atteint"),
-                 Line2D([], [], marker="D", linestyle="", color=COULEURS_DORI[3], label="point manqué")]
+                 Line2D([], [], marker="D", linestyle="", color=COULEURS_DORI[3], label="point manqué"),
+                 Patch(facecolor=to_rgba(DANGER, 0.32), edgecolor="none",
+                       label="filmé hors parcelle")]
     if nuit:
         elements.append(Patch(facecolor="none", edgecolor="none", label="nuit : portée IR appliquée"))
     return ax.legend(handles=elements, loc="upper left", bbox_to_anchor=ancre, fontsize=8,
@@ -133,6 +135,10 @@ def dessiner_carte(ax, plan, couv, catalogue, verdicts=None, theme="document", t
     ax.set_ylim(y0, y1)
     if titre:
         ax.set_title(titre, color=t["texte"], fontsize=10, loc="left")
+    if couv.debordement.any():
+        hors = np.ma.masked_where(~couv.debordement, np.ones(couv.debordement.shape))
+        ax.imshow(hors, origin="lower", extent=couv.etendue, cmap=ListedColormap([DANGER]),
+                  alpha=0.32, interpolation="nearest", zorder=2)
     if couv.mention:
         ax.text(0.5, 0.5, couv.mention, transform=ax.transAxes, ha="center", va="center",
                 fontsize=30, rotation=28, color=t["filigrane"], alpha=0.6, zorder=9,

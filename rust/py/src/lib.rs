@@ -40,6 +40,16 @@ impl Analyse
     {
         return PyBytes::new(py, &self.couverture.couverture.nb_cameras);
     }
+
+    fn dehors<'p>(&self, py: Python<'p>) -> Bound<'p, PyBytes>
+    {
+        return PyBytes::new(py, &self.couverture.couverture.dehors);
+    }
+
+    fn debordement<'p>(&self, py: Python<'p>) -> Bound<'p, PyBytes>
+    {
+        return PyBytes::new(py, &self.couverture.couverture.debordement);
+    }
 }
 
 fn erreur(message: String) -> PyErr
@@ -56,6 +66,12 @@ fn charger_catalogue(texte: &str) -> PyResult<String>
         .map_err(|e| erreur(e.to_string()));
 }
 
+
+#[pyfunction]
+fn placer(requete_json: &str) -> PyResult<String>
+{
+    return pont::placer_json(requete_json).map_err(erreur);
+}
 
 #[pyfunction]
 fn verifier(requete_json: &str) -> PyResult<String>
@@ -118,6 +134,7 @@ fn champ_rs(m: &Bound<'_, PyModule>) -> PyResult<()>
     m.add_function(wrap_pyfunction!(analyser, m)?)?;
     m.add_function(wrap_pyfunction!(diagnostiquer, m)?)?;
     m.add_function(wrap_pyfunction!(verifier, m)?)?;
+    m.add_function(wrap_pyfunction!(placer, m)?)?;
     m.add_function(wrap_pyfunction!(niveaux_dori, m)?)?;
     m.add_function(wrap_pyfunction!(mention, m)?)?;
     return Ok(());

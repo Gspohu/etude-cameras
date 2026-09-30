@@ -4,6 +4,7 @@ pub mod analyse;
 pub mod chargement;
 pub mod modele;
 pub mod optique;
+pub mod placement;
 pub mod pont;
 pub mod scene;
 pub mod visibilite;

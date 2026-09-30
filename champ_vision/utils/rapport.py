@@ -33,6 +33,16 @@ def texte_verdicts(verdicts, detail=True):
     return "\n".join(lignes)
 
 
+def texte_conformite(liste):
+    lignes = ["Hors de la parcelle, ce que chaque caméra attrape :"]
+    for c in liste:
+        etat = "conforme" if c.conforme else "NON CONFORME"
+        lignes.append(f"  {c.camera:<12} {c.debordement_m2:7.1f} m²  {etat}")
+    if any(not c.conforme for c in liste):
+        lignes.append("  Une caméra privée ne filme ni la voie publique ni le terrain voisin")
+    return "\n".join(lignes)
+
+
 def texte_modele(m):
     portees = ", ".join(f"{n[1]} {p:.1f} m" for n, p in zip(NIVEAUX_DORI, m.portees))
     ir = "IR inconnue" if m.portee_ir_m is None else f"IR {m.portee_ir_m:g} m"

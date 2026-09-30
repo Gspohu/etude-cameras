@@ -60,6 +60,37 @@ export function vue(canvas, resume)
 }
 
 
+// what the cameras catch past the boundary, drawn over everything else because
+// it is the one thing that makes an installation illegal
+function debordement(ctx, resume, hors, v)
+{
+    const { nx, ny, pas } = resume;
+    const canevas = document.createElement("canvas");
+    canevas.width = nx;
+    canevas.height = ny;
+    const image = canevas.getContext("2d").createImageData(nx, ny);
+    const c = rvb(jeton("--colour-danger"));
+    for (let j = 0; j < ny; j += 1)
+    {
+        for (let i = 0; i < nx; i += 1)
+        {
+            if (hors[j * nx + i] === 0)
+            {
+                continue;
+            }
+            const p = ((ny - 1 - j) * nx + i) * 4;
+            image.data[p] = c[0];
+            image.data[p + 1] = c[1];
+            image.data[p + 2] = c[2];
+            image.data[p + 3] = 82;
+        }
+    }
+    canevas.getContext("2d").putImageData(image, 0, 0);
+    const [gx, gy] = v.versEcran(resume.x0 - pas / 2, resume.y0 + (ny - 0.5) * pas);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(canevas, gx, gy, nx * pas * v.echelle, ny * pas * v.echelle);
+}
+
 function zones(ctx, resume, niveaux, v)
 {
     const { nx, ny, pas } = resume;
@@ -249,12 +280,16 @@ function filigrane(ctx, canvas, texte)
 }
 
 
-export function dessiner(canvas, etat, catalogue, resume, niveaux)
+export function dessiner(canvas, etat, catalogue, resume, niveaux, hors)
 {
     const ctx = canvas.getContext("2d");
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     const v = vue(canvas, resume);
     zones(ctx, resume, niveaux, v);
+    if (hors)
+    {
+        debordement(ctx, resume, hors, v);
+    }
     trace(ctx, etat.plan.limite, v, true);
     ctx.setLineDash([6, 4]);
     ctx.lineWidth = 1;
