@@ -11,6 +11,14 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml_ng = "0.10"
 
+# Only the workspace root sets profiles, a member declaring one is ignored.
+# Size matters here : the module travels to the browser on every visit
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
+
 [workspace.lints.rust]
 unused_parens = "allow"
 
