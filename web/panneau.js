@@ -104,11 +104,11 @@ export function ficheCamera(cam, modele, niveauxDori)
 }
 
 
-export function entete(plan, nuit)
+export function entete(plan, nuit, mention)
 {
     document.getElementById("titre").textContent = plan.nom;
-    document.getElementById("statut").textContent = plan.statut === "releve"
-        ? "Cotes relevées" : "Cotes arbitraires, aucun résultat n'engage le terrain";
+    document.getElementById("statut").textContent = mention
+        ? `${mention}, les surfaces ne valent que ce que valent ces cotes` : "Cotes relevées";
     document.getElementById("bascule-nuit").classList.toggle("actif", nuit);
 }
 

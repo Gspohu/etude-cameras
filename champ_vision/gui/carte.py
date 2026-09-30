@@ -133,8 +133,8 @@ def dessiner_carte(ax, plan, couv, catalogue, verdicts=None, theme="document", t
     ax.set_ylim(y0, y1)
     if titre:
         ax.set_title(titre, color=t["texte"], fontsize=10, loc="left")
-    if plan.cotes_arbitraires:
-        ax.text(0.5, 0.5, "COTES ARBITRAIRES", transform=ax.transAxes, ha="center", va="center",
+    if couv.mention:
+        ax.text(0.5, 0.5, couv.mention, transform=ax.transAxes, ha="center", va="center",
                 fontsize=30, rotation=28, color=t["filigrane"], alpha=0.6, zorder=9,
                 fontweight="bold")
     if avec_legende:

@@ -9,6 +9,8 @@ import math
 import sys
 from pathlib import Path
 
+import champ_rs
+
 from ..moteur import (CATALOGUE_DEFAUT, NIVEAUX_DORI, PLAN_EXEMPLE, ErreurPlan, analyser,
                       charger_catalogue, charger_plan, comparer, libelle_niveau, verifier_points)
 from ..utils.rapport import texte_modele, texte_statistiques, texte_verdicts
@@ -17,9 +19,10 @@ from ..utils.rapport import texte_modele, texte_statistiques, texte_verdicts
 def _charger(args):
     catalogue = charger_catalogue(args.catalogue)
     plan = charger_plan(args.plan, catalogue)
-    if plan.cotes_arbitraires:
-        print(f"ATTENTION : le plan '{plan.nom}' porte des cotes ARBITRAIRES (statut : {plan.statut}), "
-              "aucun résultat n'engage le terrain réel", file=sys.stderr)
+    mention = champ_rs.mention(plan.statut)
+    if mention:
+        print(f"ATTENTION : le plan '{plan.nom}' porte des {mention} (statut : {plan.statut}), "
+              "les surfaces ne valent que ce que valent ses cotes", file=sys.stderr)
     for cle in sorted({c.modele for c in plan.cameras}):
         _alerter_modele(catalogue[cle], args)
     return plan, catalogue

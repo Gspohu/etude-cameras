@@ -158,6 +158,7 @@ class Couverture:
     pas: float
     nuit: bool
     hauteur_cible: float
+    mention: str | None
     utile: np.ndarray
     rho: np.ndarray
     niveau: np.ndarray
@@ -274,12 +275,11 @@ def analyser(plan, catalogue, pas=None, nuit=False, hauteur_cible=None):
     except ValueError as e:
         raise ErreurPlan(str(e)) from None
     r = json.loads(a.resume)
-    print("chien avant", r)
     forme = (r["ny"], r["nx"])
     utile = np.frombuffer(a.utile(), dtype=np.uint8).reshape(forme).astype(bool)
     rho = np.frombuffer(a.rho(), dtype="<f8").reshape((len(plan.cameras),) + forme)
     couv = Couverture(x0=r["x0"], y0=r["y0"], pas=r["pas"], nuit=r["nuit"],
-                      hauteur_cible=r["hauteur_cible"], utile=utile, rho=rho,
+                      hauteur_cible=r["hauteur_cible"], mention=r["mention"], utile=utile, rho=rho,
                       niveau=np.frombuffer(a.niveau(), dtype=np.uint8).reshape(forme),
                       nb_cameras=np.frombuffer(a.nb_cameras(), dtype=np.uint8).reshape(forme))
     stats = Statistiques(**r["statistiques"])

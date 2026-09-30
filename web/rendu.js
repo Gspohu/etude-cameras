@@ -236,7 +236,7 @@ function passages(ctx, plan, verdicts, v)
 }   
 
 
-function filigrane(ctx, canvas)
+function filigrane(ctx, canvas, texte)
 {
     ctx.save();
     ctx.translate(canvas.width / 2, canvas.height / 2);
@@ -244,7 +244,7 @@ function filigrane(ctx, canvas)
     ctx.font = "600 42px Ubuntu, sans-serif";
     ctx.textAlign = ("center");
     ctx.fillStyle = jeton("--colour-danger") + "33";
-    ctx.fillText("COTES ARBITRAIRES", 0, 0);
+    ctx.fillText(texte, 0, 0);
     ctx.restore();
 }
 
@@ -264,9 +264,9 @@ export function dessiner(canvas, etat, catalogue, resume, niveaux)
     obstacles(ctx, etat.plan, v);
     cameras(ctx, etat, catalogue, v); 
     passages(ctx, etat.plan, resume.verdicts, v);
-    if (etat.plan.statut !== "releve")
+    if (resume.mention)
     {
-        filigrane(ctx, canvas);
+        filigrane(ctx, canvas, resume.mention);
     }
     return v;
 }

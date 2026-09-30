@@ -134,7 +134,9 @@ def test_conseil_designe_la_vraie_cause(catalogue):
 def test_plan_exemple_se_charge(catalogue):
     plan = charger_plan(PLAN_EXEMPLE, catalogue)
     assert plan.cotes_arbitraires
-    assert len(plan.cameras) == 2 and len(plan.points) == 4
+    assert len(plan.cameras) == 2 and len(plan.points) == 2
+    # la parcelle AN 164 fait environ 350 m2, moins les deux constructions
+    assert analyser(plan, catalogue).statistiques.surface_m2 == pytest.approx(213.0, abs=1.0)
 
 
 def test_modele_inconnu_refuse(catalogue, tmp_path):

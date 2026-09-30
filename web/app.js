@@ -114,7 +114,7 @@ function remplirPanneau(resume)
         panneau.ficheCamera(c, catalogue[c.modele], niveauxDori);
     }
     document.getElementById("cible").value = resume.hauteur_cible.toFixed(1);
-    panneau.entete(etat.plan, etat.nuit);
+    panneau.entete(etat.plan, etat.nuit, resume.mention);
 }
 
 function ligneComparaison(cle)

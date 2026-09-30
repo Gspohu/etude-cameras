@@ -40,14 +40,16 @@ async function lancer()
     const st = resume.statistiques;
 
     // the very numbers the Python command line prints on the same plan
-    verifier("surface surveillée", proche(st.surface_m2, 525.0), st.surface_m2.toFixed(1));
+    verifier("surface surveillée", proche(st.surface_m2, 213.0), st.surface_m2.toFixed(1));
     verifier("surfaces DORI",
-             [242.8, 223.8, 106.9, 30.0].every((v, i) => proche(st.au_moins_m2[i], v)),
+             [75.8, 75.8, 73.6, 28.4].every((v, i) => proche(st.au_moins_m2[i], v)),
              st.au_moins_m2.map((v) => v.toFixed(1)).join(" "));
-    verifier("verdicts", resume.verdicts.filter((v) => v.ok).length === 2,
+    verifier("verdicts", resume.verdicts.filter((v) => v.ok).length === 1,
              resume.verdicts.map((v) => `${v.nom}=${v.ok}`).join(" "));
-    verifier("conseil sur le portail",
-             resume.verdicts[0].conseil.includes("moins de 4.9 m"), resume.verdicts[0].conseil);
+    verifier("conseil sur le fond de parcelle",
+             resume.verdicts[1].conseil.includes("aucune caméra ne le cadre"),
+             resume.verdicts[1].conseil);
+    verifier("mention du statut", resume.mention === "COTES ESTIMEES", String(resume.mention));
 
     // an unreachable IR range must empty the night coverage
     const myope = JSON.parse(JSON.stringify(catalogue));
