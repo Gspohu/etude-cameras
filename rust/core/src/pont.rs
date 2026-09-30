@@ -4,7 +4,8 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::analyse::{statistiques, verifier_points, Statistiques, VerdictPoint};
+use crate::analyse::{conformite, statistiques, verifier_points, Conformite, Statistiques,
+                     VerdictPoint};
 use crate::modele::{niveau, ModeleCamera, NIVEAUX_DORI};
 use crate::scene::Plan;
 use crate::visibilite::{calculer, diagnostiquer, Couverture};
@@ -22,7 +23,6 @@ pub struct ModeleExpose
 
 pub fn exposer_catalogue(catalogue: &HashMap<String, ModeleCamera>) -> HashMap<String, ModeleExpose>
 {
-    println!("chien");
     let mut sortie = HashMap::new();
     for (cle, m) in catalogue
     {
@@ -89,6 +89,7 @@ pub struct Resume
 {
     pub statistiques: Statistiques,
     pub verdicts: Vec<VerdictPoint>,
+    pub conformite: Vec<Conformite>,
     pub x0: f64,
     pub y0: f64,
     pub nx: usize,
@@ -115,6 +116,7 @@ pub fn analyser(requete_json: &str) -> Result<Analyse, String>
     {
         statistiques: statistiques(&couv),
         verdicts: verifier_points(&r.plan, &r.catalogue, r.nuit)?,
+        conformite: conformite(&r.plan, &couv),
         x0: couv.x0, y0: couv.y0, nx: couv.nx, ny: couv.ny, pas: couv.pas,
         nuit: couv.nuit, hauteur_cible: couv.hauteur_cible,
         mention: crate::modele::mention_statut(&r.plan.statut).map(|m| m.to_string()),
@@ -122,6 +124,23 @@ pub fn analyser(requete_json: &str) -> Result<Analyse, String>
     return Ok(Analyse { couverture: couv, resume });
 }
 
+
+#[derive(Deserialize)]
+pub struct RequetePlacement
+{
+    pub plan: Plan,
+    pub catalogue: HashMap<String, ModeleCamera>,
+    #[serde(flatten)]
+    pub reglages: crate::placement::Reglages,
+}
+
+pub fn placer_json(requete_json: &str) -> Result<String, String>
+{
+    let r: RequetePlacement = serde_json::from_str(requete_json)
+        .map_err(|e| format!("requête illisible : {}", e))?;
+    let p = crate::placement::placer(&r.plan, &r.catalogue, &r.reglages)?;
+    return serde_json::to_string(&p).map_err(|e| e.to_string());
+}
 
 // Checkpoint verdicts alone, the grid is not needed for them
 pub fn verifier_json(requete_json: &str) -> Result<String, String>

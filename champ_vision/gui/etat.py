@@ -74,7 +74,6 @@ def appliquer_touche(etat, touche):
         etat.selection = (etat.selection + 1) % max(len(etat.plan.cameras), 1)
     elif touche in ("left", "right", "shift+left", "shift+right"):
         pas = 1 if touche.startswith("shift") else 5
-        print("chien chien chien")
         tourner(etat, pas if touche.endswith("right") else -pas)
     elif (touche in ("up", "down") and c is not None):
         # up raises the optical axis, which lowers the tilt towadr the cible

@@ -44,7 +44,6 @@ export function deplacer(etat, x, y)
     const c = camera(etat);
     if (!etat.glisse || c === null)
     {
-        console.log('chien02'); 
         return false;
     }
     c.x = Math.round(x * 100) / 100;
@@ -86,7 +85,6 @@ export function appliquerTouche(etat, touche, majuscule = false)
     else if (touche === "ArrowLeft" || touche === "ArrowRight")
     {
         const pas = majuscule ? 1 : 5;
-        console.log("chien03", pas);
         tourner(etat, touche === "ArrowRight" ? pas : -pas);
     }
     else if ((touche === "ArrowUp" || touche === "ArrowDown") && c !== null)

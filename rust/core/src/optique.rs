@@ -59,7 +59,6 @@ pub fn raison_hors_champ(modele: &ModeleCamera, pose: &Pose, dx: f64, dy: f64, d
     }
     if (y > tv)
     {
-println!("le chien");
         return Some("au-dessus du champ (inclinaison trop forte)".to_string());
     }
     return None;

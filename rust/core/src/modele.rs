@@ -17,7 +17,6 @@ pub fn index_niveau(cle: &str) -> Result<u8, String>
 {
     for (i, (c, _, _)) in NIVEAUX_DORI.iter().enumerate()
     {
-        println!("chien chien");
         if (c == &cle)
         {
             return Ok((i + 1) as u8);
