@@ -105,6 +105,8 @@ class Plan:
     points: list = field(default_factory=list)
     hauteur_cible: float = 1.6
     pas: float = 0.1
+    # width of the band looked at past the boundary, it sets what counts as filmed outside
+    marge_hors: float = 12.0
 
     @property
     def cotes_arbitraires(self):
@@ -152,6 +154,13 @@ class VerdictPoint:
 
 
 @dataclass
+class Conformite:
+    camera: str
+    debordement_m2: float
+    conforme: bool
+
+
+@dataclass
 class Couverture:
     x0: float
     y0: float
@@ -160,6 +169,8 @@ class Couverture:
     hauteur_cible: float
     mention: str | None
     utile: np.ndarray
+    dehors: np.ndarray
+    debordement: np.ndarray
     rho: np.ndarray
     niveau: np.ndarray
     nb_cameras: np.ndarray
@@ -190,6 +201,7 @@ class Analyse:
     couverture: Couverture
     statistiques: Statistiques
     verdicts: list
+    conformite: list
 
 
 def _modele(cle, b):
@@ -217,7 +229,7 @@ def charger_plan(chemin, catalogue):
         raise ErreurPlan(str(e)) from None
     d = json.loads(brut)
     plan = Plan(nom=d["nom"], statut=d["statut"], limite=[tuple(p) for p in d["limite"]],
-                hauteur_cible=d["hauteur_cible"], pas=d["pas"])
+                hauteur_cible=d["hauteur_cible"], pas=d["pas"], marge_hors=d["marge_hors"])
     plan.obstacles = [Obstacle(nom=o["nom"], type=o["type"], points=[tuple(p) for p in o["points"]],
                                hauteur=o["hauteur"], ferme=o["ferme"], opaque=o["opaque"],
                                base=o["base"]) for o in d["obstacles"]]
@@ -234,7 +246,7 @@ def enregistrer_plan(plan, chemin):
 def _plan_dict(plan):
     return {
         "nom": plan.nom, "statut": plan.statut, "limite": [list(p) for p in plan.limite],
-        "hauteur_cible": plan.hauteur_cible, "pas": plan.pas,
+        "hauteur_cible": plan.hauteur_cible, "pas": plan.pas, "marge_hors": plan.marge_hors,
         "obstacles": [{"nom": o.nom, "type": o.type, "points": [list(p) for p in o.points],
                        "hauteur": o.hauteur, "base": o.base, "ferme": o.ferme,
                        "opaque": o.opaque} for o in plan.obstacles],
@@ -279,11 +291,41 @@ def analyser(plan, catalogue, pas=None, nuit=False, hauteur_cible=None):
     utile = np.frombuffer(a.utile(), dtype=np.uint8).reshape(forme).astype(bool)
     rho = np.frombuffer(a.rho(), dtype="<f8").reshape((len(plan.cameras),) + forme)
     couv = Couverture(x0=r["x0"], y0=r["y0"], pas=r["pas"], nuit=r["nuit"],
-                      hauteur_cible=r["hauteur_cible"], mention=r["mention"], utile=utile, rho=rho,
+                      hauteur_cible=r["hauteur_cible"], mention=r["mention"], utile=utile,
+                      dehors=np.frombuffer(a.dehors(), dtype=np.uint8).reshape(forme).astype(bool),
+                      debordement=np.frombuffer(a.debordement(),
+                                                dtype=np.uint8).reshape(forme).astype(bool),
+                      rho=rho,
                       niveau=np.frombuffer(a.niveau(), dtype=np.uint8).reshape(forme),
                       nb_cameras=np.frombuffer(a.nb_cameras(), dtype=np.uint8).reshape(forme))
     stats = Statistiques(**r["statistiques"])
-    return Analyse(couv, stats, _verdicts(r["verdicts"]))
+    return Analyse(couv, stats, _verdicts(r["verdicts"]),
+                   [Conformite(**c) for c in r["conformite"]])
+
+
+def placer(plan, catalogue, nb_cameras=None, modeles=None, pas_grille=0.3,
+           pas_azimut=10.0, hauteurs=None, inclinaisons=None, budget_eur=None,
+           gain_minimal_m2=5.0):
+    """Poses that watch the plot without filming past its boundary"""
+    requete = json.loads(_requete(plan, catalogue))
+    requete.update({"pas_grille": pas_grille, "pas_azimut": pas_azimut,
+                    "gain_minimal_m2": gain_minimal_m2})
+    if nb_cameras:
+        requete["nb_cameras"] = nb_cameras
+    if budget_eur:
+        requete["budget_eur"] = budget_eur
+    if modeles:
+        requete["modeles"] = list(modeles)
+    if hauteurs:
+        requete["hauteurs"] = list(hauteurs)
+    if inclinaisons:
+        requete["inclinaisons"] = list(inclinaisons)
+    try:
+        p = json.loads(champ_rs.placer(json.dumps(requete)))
+    except ValueError as e:
+        raise ErreurPlan(str(e)) from None
+    p["poses"] = [Pose(**q) for q in p["poses"]]
+    return p
 
 
 def verifier_points(plan, catalogue, nuit=False):
