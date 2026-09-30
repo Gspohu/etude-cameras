@@ -12,8 +12,9 @@ from pathlib import Path
 import champ_rs
 
 from ..moteur import (CATALOGUE_DEFAUT, NIVEAUX_DORI, PLAN_EXEMPLE, ErreurPlan, analyser,
-                      charger_catalogue, charger_plan, comparer, libelle_niveau, verifier_points)
-from ..utils.rapport import texte_modele, texte_statistiques, texte_verdicts
+                      charger_catalogue, charger_plan, comparer, enregistrer_plan, libelle_niveau,
+                      placer, verifier_points)
+from ..utils.rapport import texte_conformite, texte_modele, texte_statistiques, texte_verdicts
 
 
 def _charger(args):
@@ -62,18 +63,21 @@ def cmd_carte(args):
     plt.close(fig)
     print(texte_statistiques(analyse.statistiques))
     print(texte_verdicts(verdicts))
+    print(texte_conformite(analyse.conformite))
     print(f"Carte : {sortie}")
     return 0
 
 
 def cmd_verifier(args):
     plan, catalogue = _charger(args)
-    verdicts = verifier_points(plan, catalogue, args.nuit)
-    if not verdicts:
+    analyse = analyser(plan, catalogue, nuit=args.nuit)
+    if not analyse.verdicts:
         print("Aucun point de passage dans le plan, ajoutez une section points_passage")
         return 1
-    print(texte_verdicts(verdicts))
-    return 0 if all(v.ok for v in verdicts) else 2
+    print(texte_verdicts(analyse.verdicts))
+    print(texte_conformite(analyse.conformite))
+    tenu = all(v.ok for v in analyse.verdicts)
+    return 0 if (tenu and all(c.conforme for c in analyse.conformite)) else 2
 
 
 def cmd_comparer(args):
@@ -151,6 +155,37 @@ def cmd_fenetre(args):
     return 0
 
 
+def cmd_placer(args):
+    plan, catalogue = _charger(args)
+    p = placer(plan, catalogue, nb_cameras=args.cameras, modeles=args.modeles,
+               pas_grille=args.pas_grille, pas_azimut=args.pas_azimut,
+               hauteurs=args.hauteurs, inclinaisons=args.inclinaisons,
+               budget_eur=args.budget, gain_minimal_m2=args.gain_minimal)
+    print(f"{p['essais']} poses essayées, {p['candidats']} candidats conformes au droit "
+          f"(une pose avec un modèle)")
+    if not p["poses"]:
+        print("Aucune pose conforme : baissez les caméras, inclinez-les davantage, "
+              "ou rapprochez-les de la clôture")
+        return 1
+    for pose, etape in zip(p["poses"], p["etapes"]):
+        part = 100 * etape["cumul_m2"] / p["surface_m2"] if p["surface_m2"] else 0.0
+        print(f"  {pose.nom:<5} ({pose.x:6.2f}, {pose.y:6.2f})  {pose.hauteur:.1f} m  "
+              f"az {pose.azimut:3.0f}°  plongée {pose.inclinaison:2.0f}°  "
+              f"{catalogue[pose.modele].nom}")
+        print(f"        apporte {etape['gain_m2']:5.1f} m², cumul {etape['cumul_m2']:5.1f} m² "
+              f"({part:.0f} %), dépense {etape['cout_eur']:.0f} €")
+    part = 100 * p["couverture_m2"] / p["surface_m2"] if p["surface_m2"] else 0.0
+    print(f"Retenu : {len(p['poses'])} caméras, {p['cout_eur']:.0f} €, "
+          f"{p['couverture_m2']:.0f} m² sur {p['surface_m2']:.0f} ({part:.0f} %), "
+          f"points tenus {p['points_tenus']}/{len(plan.points)}")
+    if args.sortie:
+        propose = plan.copie()
+        propose.cameras = p["poses"]
+        enregistrer_plan(propose, args.sortie)
+        print(f"Plan proposé : {args.sortie}")
+    return 0
+
+
 def cmd_cotes(args):
     plan, catalogue = _charger(args)
     print(f"Plan '{plan.nom}', statut : {plan.statut}")
@@ -212,6 +247,24 @@ def construire_parseur():
     commun(sp, graphique=False)
     sp.add_argument("--pas", type=float, default=0.2, help="pas de la grille en mètres")
     sp.set_defaults(func=cmd_fenetre)
+
+    sp = sous.add_parser("placer", help="propose des poses conformes au droit")
+    commun(sp, graphique=False)
+    sp.add_argument("--cameras", type=int, default=None,
+                    help="nombre imposé, sinon le logiciel s'arrête quand une de plus ne paie plus")
+    sp.add_argument("--modeles", nargs="+", default=None,
+                    help="modèles en concurrence, sinon tout le catalogue")
+    sp.add_argument("--budget", type=float, default=None, help="plafond de dépense en euros")
+    sp.add_argument("--gain-minimal", type=float, default=5.0,
+                    help="surface qu'une caméra de plus doit apporter, en mètres carrés")
+    sp.add_argument("--pas-grille", type=float, default=0.3, help="pas de la grille de recherche")
+    sp.add_argument("--pas-azimut", type=float, default=10.0, help="pas angulaire balayé")
+    sp.add_argument("--hauteurs", type=float, nargs="+", default=None,
+                    help="hauteurs de fixation essayées, en mètres")
+    sp.add_argument("--inclinaisons", type=float, nargs="+", default=None,
+                    help="plongées essayées, en degrés")
+    sp.add_argument("-o", "--sortie", default=None, help="plan YAML à écrire avec ces poses")
+    sp.set_defaults(func=cmd_placer)
 
     sp = sous.add_parser("cotes", help="liste des cotes à relever pour ce plan")
     commun(sp, graphique=False)
