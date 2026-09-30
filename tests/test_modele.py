@@ -10,7 +10,7 @@ import pytest
 
 from champ_vision.moteur import (PLAN_EXEMPLE, ErreurPlan, Obstacle, Plan, PointPassage, Pose,
                                  analyser, charger_catalogue, charger_plan, diagnostiquer,
-                                 verifier_points)
+                                 enregistrer_plan, placer, verifier_points)
 from champ_vision.utils.rapport import texte_verdicts
 
 
@@ -135,8 +135,50 @@ def test_plan_exemple_se_charge(catalogue):
     plan = charger_plan(PLAN_EXEMPLE, catalogue)
     assert plan.cotes_arbitraires
     assert len(plan.cameras) == 2 and len(plan.points) == 2
-    # la parcelle AN 164 fait environ 350 m2, moins les deux constructions
-    assert analyser(plan, catalogue).statistiques.surface_m2 == pytest.approx(213.0, abs=1.0)
+    # la parcelle AN 164 fait 349 m2, moins les deux constructions
+    a = analyser(plan, catalogue)
+    assert a.statistiques.surface_m2 == pytest.approx(218.7, abs=1.0)
+    # les poses de l'exemple sortent de placer , elles ne filment pas dehors
+    assert all(c.conforme for c in a.conformite)
+
+
+def _avec_cabane(hauteur=3.0):
+    cabane = Obstacle("cabane", "batiment", [(10, -3), (16, -3), (16, 3), (10, 3)], hauteur,
+                      True, True)
+    plan = terrain([cabane])
+    plan.cameras.clear()
+    plan.marge_hors = 2.0
+    return plan
+
+
+def test_placer_ne_propose_que_des_poses_conformes(catalogue):
+    # le 520a a moins de hfov que le 820a mais plus de vfov, et c'est le vfov
+    # qui décide jusqu'où le cône touche le sol
+    plan = charger_plan(PLAN_EXEMPLE, catalogue)
+    plan.cameras.clear()
+    p = placer(plan, catalogue, modeles=["reolink-520a", "reolink-820a"], pas_grille=0.6,
+               pas_azimut=20.0, hauteurs=[2.5, 2.8], inclinaisons=[30.0])
+    assert p["poses"], "aucune pose proposée"
+    propose = plan.copie()
+    propose.cameras = p["poses"]
+    for c in analyser(propose, catalogue, pas=0.6).conformite:
+        assert c.conforme, f"{c.camera} déborde de {c.debordement_m2:.1f} m²"
+
+
+def test_placer_tient_le_budget(catalogue):
+    plan = _avec_cabane()
+    p = placer(plan, catalogue, modeles=["reolink-520a"], budget_eur=100.0, pas_grille=0.8,
+               pas_azimut=90.0, hauteurs=[2.5], inclinaisons=[40.0])
+    assert 0 < len(p["poses"]) <= 2
+    assert p["cout_eur"] <= 100.0
+
+
+def test_marge_hors_traverse_la_couche_python(catalogue, tmp_path):
+    plan = charger_plan(PLAN_EXEMPLE, catalogue)
+    plan.marge_hors = 7.5
+    f = tmp_path / "p.yaml"
+    enregistrer_plan(plan, f)
+    assert charger_plan(f, catalogue).marge_hors == 7.5
 
 
 def test_modele_inconnu_refuse(catalogue, tmp_path):

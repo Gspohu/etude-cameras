@@ -7,7 +7,7 @@ use crate::analyse::{statistiques, verifier_points};
 use crate::chargement::{charger_catalogue, charger_plan};
 use crate::modele::{niveau, ModeleCamera};   
 use crate::scene::{Obstacle, Plan, PointPassage, Pose};
-use crate::visibilite::{calculer, diagnostiquer};
+use crate::visibilite::{calculer, dans_polygone, diagnostiquer};
 
 const CATALOGUE: &str = include_str!("../../../champ_vision/data/cameras.yaml");
 const PLAN: &str = include_str!("../../../champ_vision/data/plan_exemple.yaml");
@@ -32,7 +32,7 @@ fn terrain(obstacles: Vec<Obstacle>, hauteur: f64, inclinaison: f64) -> Plan
         obstacles,
         cameras: vec![Pose { nom: "cam".into(), modele: "dahua-2441-28".into(), x: 0.0, y: 0.0,
                              hauteur, azimut: 90.0, inclinaison }],
-        points: Vec::new(), hauteur_cible: 1.6, pas: 0.25,
+        points: Vec::new(), hauteur_cible: 1.6, pas: 0.25, marge_hors: 2.0,
     };
 }
 
@@ -172,6 +172,186 @@ fn verdict_et_conseil() -> Essai
 
 
 #[test]
+fn une_cloture_opaque_borne_ce_qui_est_filme_dehors() -> Essai
+{
+    // la camera regarde vers l'exterieur : sans cloture elle deborde largement
+    // derriere 2 m opaques elle ne voit plus que le lointain
+    let cat = catalogue()?;
+    let mut plan = terrain(Vec::new(), 2.8, 5.0);
+    plan.cameras[0].azimut = 270.0;
+    plan.cameras[0].x = 3.0;
+    plan.marge_hors = 12.0;
+    let nu = crate::analyse::conformite(&plan, &calculer(&plan, &cat, None, false, None)?);
+    let mur_ouest = Obstacle { nom: "cloture".into(), genre: "cloture".into(),
+                               points: vec![[0.0, -10.0], [0.0, 10.0]], hauteur: 2.0, base: 0.0,
+                               ferme: false, opaque: true };
+    plan.obstacles.push(mur_ouest);
+    let ferme = crate::analyse::conformite(&plan, &calculer(&plan, &cat, None, false, None)?);
+    assert!(nu[0].debordement_m2 > ferme[0].debordement_m2 + 5.0,
+            "sans cloture {:.1} m2, avec {:.1} m2", nu[0].debordement_m2, ferme[0].debordement_m2);
+    return Ok(());
+}
+
+
+#[test]
+fn les_poses_proposees_ne_filment_pas_dehors() -> Essai
+{
+    let cat = catalogue()?;
+    let mut plan = charger_plan(PLAN, &cat, "exemple")?;
+    plan.cameras.clear();
+    let reglages: crate::placement::Reglages = serde_json::from_str(
+        "{\"nb_cameras\": 1, \"modeles\": [\"dahua-2441-28\"], \"pas_grille\": 0.6, \
+          \"pas_azimut\": 45, \"hauteurs\": [2.2], \"inclinaisons\": [30]}")
+        .map_err(|e| e.to_string())?;
+    let p = crate::placement::placer(&plan, &cat, &reglages)?;
+    assert_eq!(p.poses.len(), 1, "aucune pose proposée");
+    plan.cameras = p.poses.clone();
+    let couv = calculer(&plan, &cat, None, false, None)?;
+    for c in crate::analyse::conformite(&plan, &couv)
+    {
+        assert!(c.conforme, "{} déborde de {:.1} m2", c.camera, c.debordement_m2);
+    }
+    return Ok(());
+}
+
+
+#[test]
+fn ancrages_sortent_du_batiment_saisi_dans_les_deux_sens() -> Essai
+{
+    let antihoraire = vec![[10.0, -5.0], [20.0, -5.0], [20.0, 5.0], [10.0, 5.0]];
+    let mut horaire = antihoraire.clone();
+    horaire.reverse();
+    for points in [antihoraire, horaire]
+    {
+        let maison = Obstacle { nom: "maison".into(), genre: "batiment".into(),
+                                points: points.clone(), hauteur: 6.0, base: 0.0,
+                                ferme: true, opaque: true };
+        let poses = crate::placement::ancrages(&terrain(vec![maison], 2.8, 0.0), 1.0);
+        assert!(!poses.is_empty(), "aucun ancrage proposé");
+        for a in &poses
+        {
+            assert!(!dans_polygone(a.x, a.y, &points),
+                    "ancrage ({:.2}, {:.2}) posé dans le mur", a.x, a.y);
+        }
+    }
+    return Ok(());
+}
+
+
+#[test]
+fn aucune_fixation_au_dessus_de_son_support() -> Essai
+{
+    let cat = catalogue()?;
+    let cabane = Obstacle { nom: "cabane".into(), genre: "batiment".into(),
+                            points: vec![[10.0, -3.0], [16.0, -3.0], [16.0, 3.0], [10.0, 3.0]],
+                            hauteur: 2.4, base: 0.0, ferme: true, opaque: true };
+    let mut plan = terrain(vec![cabane], 2.8, 0.0);
+    plan.cameras.clear();
+    let essayer = |h: &str| -> Result<usize, String>
+    {
+        let texte = format!("{{\"modeles\": [\"dahua-2441-28\"], \"pas_grille\": 0.8, \
+                             \"pas_azimut\": 90, \"hauteurs\": [{}], \"inclinaisons\": [40]}}", h);
+        let reglages: crate::placement::Reglages = serde_json::from_str(&texte)
+            .map_err(|e| e.to_string())?;
+        return Ok(crate::placement::placer(&plan, &cat, &reglages)?.poses.len());
+    };
+    // le support fait 2,4 m : on se fixe dessous, jamais au dessus de son toit
+    assert!(essayer("2.2")? > 0, "rien trouvé sous le toit de la cabane");
+    assert_eq!(essayer("3.2")?, 0, "une caméra proposée au dessus de son support");
+    return Ok(());
+}
+
+
+#[test]
+fn modeles_mal_ordonnes_ne_filment_pas_dehors() -> Essai
+{
+    // le 520a a moins de hfov que le 820a mais plus de vfov, majorer sur le
+    // seul hfov laissait passer des poses qui filment chez le voisin
+    let cat = catalogue()?;
+    let mut plan = charger_plan(PLAN, &cat, "exemple")?;
+    plan.cameras.clear();
+    let reglages: crate::placement::Reglages = serde_json::from_str(
+        "{\"modeles\": [\"reolink-520a\", \"reolink-820a\"], \"pas_grille\": 0.6, \
+          \"pas_azimut\": 20, \"hauteurs\": [2.5, 2.8], \"inclinaisons\": [30]}")
+        .map_err(|e| e.to_string())?;
+    let p = crate::placement::placer(&plan, &cat, &reglages)?;
+    assert!(!p.poses.is_empty(), "aucune pose proposée");
+    plan.cameras = p.poses.clone();
+    let couv = calculer(&plan, &cat, Some(0.6), false, None)?;
+    for c in crate::analyse::conformite(&plan, &couv)
+    {
+        assert!(c.conforme, "{} déborde de {:.1} m2", c.camera, c.debordement_m2);
+    }
+    return Ok(());
+}
+
+
+#[test]
+fn ce_qui_est_retenu_tient_sur_la_grille_du_plan() -> Essai
+{
+    // cherchée à 0.5 m, une bande étroite de débordement passe entre les mailles
+    // et la pose parait propre tant qu'on ne la rejuge pas plus finement
+    let cat = catalogue()?;
+    let mut plan = charger_plan(PLAN, &cat, "exemple")?;
+    plan.cameras.clear();
+    let reglages: crate::placement::Reglages = serde_json::from_str(
+        "{\"modeles\": [\"dahua-2441-28\"], \"pas_grille\": 0.5, \"pas_azimut\": 20, \
+          \"hauteurs\": [2.5], \"inclinaisons\": [30]}")
+        .map_err(|e| e.to_string())?;
+    let p = crate::placement::placer(&plan, &cat, &reglages)?;
+    assert!(!p.poses.is_empty(), "aucune pose proposée");
+    plan.cameras = p.poses.clone();
+    let couv = calculer(&plan, &cat, None, false, None)?;
+    for c in crate::analyse::conformite(&plan, &couv)
+    {
+        assert!(c.conforme, "{} déborde de {:.3} m2", c.camera, c.debordement_m2);
+    }
+    return Ok(());
+}
+
+
+#[test]
+fn une_fiche_sans_portee_ir_ne_concourt_pas_seule() -> Essai
+{
+    let cat = catalogue()?;
+    let mut plan = charger_plan(PLAN, &cat, "exemple")?;
+    plan.cameras.clear();
+    let regler = |modeles: &str| -> Result<crate::placement::Reglages, String>
+    {
+        let texte = format!("{{\"nb_cameras\": 1, \"pas_grille\": 0.8, \"pas_azimut\": 45, \
+                             \"hauteurs\": [2.2, 2.8], \"inclinaisons\": [30, 40]{}}}", modeles);
+        return serde_json::from_str(&texte).map_err(|e| e.to_string());
+    };
+    let libre = crate::placement::placer(&plan, &cat, &regler("")?)?;
+    assert!(!libre.poses.is_empty(), "aucune pose proposée");
+    for pose in &libre.poses
+    {
+        let m = &cat[&pose.modele];
+        assert!(m.portee_ir_m.is_some(), "{} proposé sans portée IR connue", pose.modele);
+        assert!(m.verifie, "{} proposé sur une fiche non vérifiée", pose.modele);
+    }
+    // nommé explicitement, il reste jouable
+    let force = crate::placement::placer(&plan, &cat,
+                                         &regler(", \"modeles\": [\"tapo-c325wb\"]")?)?;
+    assert_eq!(force.poses.first().map(|p| p.modele.as_str()), Some("tapo-c325wb"));
+    return Ok(());
+}
+
+
+#[test]
+fn marge_hors_survit_a_l_aller_retour() -> Essai
+{
+    let cat = catalogue()?;
+    let mut plan = charger_plan(PLAN, &cat, "exemple")?;
+    // une valeur qui n'est pas celle par défaut, sinon l'oubli ne se voit pas
+    plan.marge_hors = 7.5;
+    let relu = charger_plan(&crate::chargement::plan_vers_yaml(&plan)?, &cat, "exemple")?;
+    assert_eq!(relu.marge_hors, 7.5);
+    return Ok(());
+}
+
+
+#[test]
 fn plan_exemple_se_charge() -> Essai
 {
     let cat = catalogue()?;
@@ -181,8 +361,8 @@ fn plan_exemple_se_charge() -> Essai
     assert_eq!(plan.points.len(), 2);
     let couv = calculer(&plan, &cat, None, false, None)?;
     let st = statistiques(&couv);
-    // la parcelle fait environ 350 m2, moins le projet et la maison existante
-    assert!((st.surface_m2 - 213.0).abs() < 2.0, "surface {}", st.surface_m2);
+    // la parcelle fait 349 m2, moins le projet et la maison existante
+    assert!((st.surface_m2 - 218.7).abs() < 2.0, "surface {}", st.surface_m2);
     return Ok(());
 }
 

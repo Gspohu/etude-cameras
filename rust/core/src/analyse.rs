@@ -11,6 +11,7 @@ use crate::scene::Plan;
 use crate::visibilite::{diagnostiquer, Couverture};
 
 
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Statistiques
 {
@@ -21,6 +22,46 @@ pub struct Statistiques
 }
 
 
+// In France a private camera watches the property it belongs to, and nothing
+// else : neither the public way nor a neighbour's ground. This counts, camera by
+// camera, the ground it catches past the boundary at the target height
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Conformite
+{
+    pub camera: String,
+    pub debordement_m2: f64,
+    pub conforme: bool,
+}
+
+// What a camera may catch past the boundary before the installation is called
+// illegal. An absolute figure, never a count of cells : two cells read 0.02 m2
+// at a 0.1 m step and 0.50 m2 at 0.5 m, and one plan then changed verdict with
+// the fineness of its own computation
+pub const TOLERANCE_DEBORDEMENT_M2: f64 = 0.05;
+
+pub fn conformite(plan: &Plan, couv: &Couverture) -> Vec<Conformite>
+{
+    let cellule = couv.pas * couv.pas;
+    let cellules = couv.nx * couv.ny;
+    let mut sortie = Vec::new();
+    for (k, pose) in plan.cameras.iter().enumerate()
+    {
+        let mut compte = 0usize;
+        for c in 0..cellules
+        {
+            if (couv.dehors[c] == 1 && couv.rho[k * cellules + c] > 0.0)
+            {
+                compte += 1;
+            }
+        }
+        let debordement = compte as f64 * cellule;
+        // a sliver along the fence is sampling noise, not a camera aimed outwards
+        sortie.push(Conformite { camera: pose.nom.clone(), debordement_m2: debordement,
+                                 conforme: debordement <= TOLERANCE_DEBORDEMENT_M2 });
+    }
+    return sortie;
+}
+
 pub fn statistiques(couv: &Couverture) -> Statistiques
 {
     let cellule = couv.pas * couv.pas;
@@ -28,7 +69,6 @@ pub fn statistiques(couv: &Couverture) -> Statistiques
     let mut au_moins = vec![0.0; NIVEAUX_DORI.len()];
     for k in 1..=NIVEAUX_DORI.len()
     {
-        eprintln!("chien");
         au_moins[k - 1] = couv.niveau.iter().filter(|n| **n as usize >= k).count() as f64 * cellule;
     }
     let redondance = couv.nb_cameras.iter().filter(|n| **n >= 2).count() as f64 * cellule;
