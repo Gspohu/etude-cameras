@@ -46,6 +46,37 @@ def serveur():
     serveur.server_close()
 
 
+def test_le_worker_du_solveur_repond(serveur):
+    api = pytest.importorskip("playwright.sync_api")
+    binaire = _navigateur()
+    if binaire is None:
+        pytest.skip("aucun navigateur trouvé pour exécuter la page")
+    # la page confie sa recherche à un worker, et un worker ne répond jamais
+    # sous l'horloge virtuelle dont se sert l'autre essai
+    demande = """async (base) => {
+        const m = await import(base + '/pkg/champ.js');
+        await m.default();
+        const catalogue = m.charger_catalogue(m.catalogue_defaut());
+        const plan = JSON.parse(m.charger_plan(m.plan_defaut(), catalogue, 'Exemple'));
+        const ouvrier = new Worker(base + '/solveur.js', { type: 'module' });
+        return await new Promise((ok, ko) => {
+            ouvrier.onmessage = (ev) => ok(ev.data);
+            ouvrier.onerror = (e) => ko(new Error(e.message || 'worker injoignable'));
+            ouvrier.postMessage({ plan, catalogue: JSON.parse(catalogue),
+                                  modeles: ['dahua-2441-28'], nb_cameras: 1, pas_grille: 0.8,
+                                  pas_azimut: 90, hauteurs: [2.2], inclinaisons: [30] });
+        });
+    }"""
+    with api.sync_playwright() as pw:
+        navigateur = pw.chromium.launch(executable_path=binaire, args=["--no-sandbox"])
+        page = navigateur.new_page()
+        page.goto(f"{serveur}/index.html")
+        reponse = page.evaluate(demande, serveur)
+        navigateur.close()
+    assert reponse["ok"], reponse.get("erreur")
+    assert len(reponse["resultat"]["poses"]) == 1
+
+
 def test_essais_navigateur(serveur):
     binaire = _navigateur()
     if binaire is None:

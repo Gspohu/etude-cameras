@@ -34,9 +34,9 @@ function erreur(message)
     document.getElementById("erreur").textContent = message || "";
 }
 
-function signaler(e)
+function signaler(e, quoi = "")
 {
-    erreur(String(e.message || e));
+    erreur((quoi ? `${quoi} : ` : "") + String(e.message || e));
 }
 
 function dimensionner()
@@ -85,7 +85,7 @@ function recalculer()
     erreur("");
     const resume = JSON.parse(analyse.resume);
     niveaux = analyse.niveau();
-    derniereVue = dessiner(toile, etat, catalogue, resume, niveaux);
+    derniereVue = dessiner(toile, etat, catalogue, resume, niveaux, analyse.debordement());
     remplirPanneau(resume);
     clearTimeout(attenteComparaison);
     attenteComparaison = setTimeout(() =>
@@ -114,6 +114,7 @@ function remplirPanneau(resume)
         panneau.ficheCamera(c, catalogue[c.modele], niveauxDori);
     }
     document.getElementById("cible").value = resume.hauteur_cible.toFixed(1);
+    panneau.conformite(resume.conformite);
     panneau.entete(etat.plan, etat.nuit, resume.mention);
 }
 
@@ -187,7 +188,7 @@ function exporterPlan()
     }
     catch (e)
     {
-        signaler(e);
+        signaler(e, "Export impossible");
     }
 }
 
@@ -199,6 +200,79 @@ function exporterImage()
         telecharger(`carte_${etat.plan.nom}.png`, blob, "image/png");
     });
 }
+
+// A whole search runs for tens of seconds, off the page thread the map stays usable
+let solveur = null;
+
+
+function etatProposition(texte)
+{
+    document.getElementById("proposition").textContent = texte;
+    document.getElementById("proposer").textContent = solveur === null ? "Proposer" : "Arrêter";
+}
+
+
+function arreterSolveur()
+{
+    if (solveur !== null)
+    {
+        solveur.terminate();
+        solveur = null;
+    }
+}
+
+
+function appliquerProposition(p)
+{
+    if (p.poses.length === 0)
+    {
+        etatProposition("Aucune pose conforme, inclinez davantage ou descendez la caméra");
+        return;
+    }
+    etat.plan.cameras = p.poses;
+    etat.selection = 0;
+    panneau.options("choix-camera", p.poses.map((c) =>
+    {
+        return c.nom;
+    }), (nom) =>
+    {
+        return nom;
+    });
+    const part = p.surface_m2 ? Math.round(100 * p.couverture_m2 / p.surface_m2) : 0;
+    etatProposition(`${p.poses.length} caméras, ${p.cout_eur.toFixed(0)} €, ${part} % couverts, `
+                    + `points tenus ${p.points_tenus}`);
+    recalculer();
+}
+
+
+function proposer()
+{
+    if (solveur !== null)
+    {
+        arreterSolveur();
+        etatProposition("Recherche arrêtée");
+        return;
+    }
+    const cle = document.getElementById("choix-modele").value;
+    solveur = new Worker("solveur.js", { type: "module" });
+    etatProposition(`Recherche avec ${catalogue[cle].nom}`);
+    solveur.onmessage = (ev) =>
+    {
+        arreterSolveur();
+        if (ev.data.ok)
+        {
+            appliquerProposition(ev.data.resultat);
+            return;
+        }
+        etatProposition("");
+        erreur(ev.data.erreur);
+    };
+    // the selected model on a coarse grid, the whole catalogue at the fine step
+    // would run for minutes even off the page thread
+    solveur.postMessage({ plan: etat.plan, catalogue: JSON.parse(catalogueJson),
+                          modeles: [cle], pas_grille: 0.5, pas_azimut: 20 });
+}
+
 
 function poserCatalogue(texte)
 {
@@ -239,7 +313,7 @@ function surFichier(id, poser)
         }
         catch (e)
         {
-            signaler(e);
+            signaler(e, `${f.name} illisible`);
         }
     });
 }
@@ -349,6 +423,7 @@ function brancher()
         etat.nuit = !etat.nuit;
         recalculer();
     });
+    document.getElementById("proposer").addEventListener("click", proposer);
     document.getElementById("exporter-image").addEventListener("click", exporterImage);
     document.getElementById("exporter-plan").addEventListener("click", exporterPlan);
     document.getElementById("comparaison").addEventListener("click", (ev) =>

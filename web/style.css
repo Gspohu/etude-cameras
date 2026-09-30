@@ -77,6 +77,11 @@ main
     min-height: 3.6rem;
 }
 
+#proposition
+{
+    min-height: 1.1rem;
+}
+
 /* A phone cannot give a fifth of its width to the map and still show it */
 @media (max-width: 900px)
 {
@@ -272,6 +277,11 @@ tbody tr:hover
 .verdict.manque
 {
     border-color: var(--colour-danger);
+}
+
+tr.manque td
+{
+    color: var(--colour-danger);
 }   
 
 

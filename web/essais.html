@@ -8,7 +8,7 @@
 <pre id="sortie">essais en cours...</pre>
 
 <script type="module">
-import init, { analyser, catalogue_defaut, charger_catalogue, charger_plan, plan_defaut,
+import init, { analyser, catalogue_defaut, charger_catalogue, charger_plan, placer, plan_defaut,
                plan_vers_yaml } from "./pkg/champ.js";
 import { appliquerTouche, attraper, camera, deplacer, relacher, tourner } from "./edition.js";
 
@@ -40,23 +40,32 @@ async function lancer()
     const st = resume.statistiques;
 
     // the very numbers the Python command line prints on the same plan
-    verifier("surface surveillée", proche(st.surface_m2, 213.0), st.surface_m2.toFixed(1));
+    verifier("surface surveillée", proche(st.surface_m2, 218.7), st.surface_m2.toFixed(1));
     verifier("surfaces DORI",
-             [75.8, 75.8, 73.6, 28.4].every((v, i) => proche(st.au_moins_m2[i], v)),
+             [74.7, 74.7, 73.5, 27.68].every((v, i) => proche(st.au_moins_m2[i], v)),
              st.au_moins_m2.map((v) => v.toFixed(1)).join(" "));
-    verifier("verdicts", resume.verdicts.filter((v) => v.ok).length === 1,
+    verifier("verdicts", resume.verdicts.every((v) => v.ok),
              resume.verdicts.map((v) => `${v.nom}=${v.ok}`).join(" "));
-    verifier("conseil sur le fond de parcelle",
-             resume.verdicts[1].conseil.includes("aucune caméra ne le cadre"),
-             resume.verdicts[1].conseil);
+
+    // un plan sans caméra : chaque point manque, et chacun porte son conseil
+    const orphelin = JSON.parse(JSON.stringify(plan));
+    orphelin.cameras = [];
+    const nu = JSON.parse(analyser(requete(orphelin)).resume);
+    verifier("conseil quand rien ne couvre",
+             nu.verdicts.every((v) => !v.ok && v.conseil),
+             nu.verdicts.map((v) => v.conseil).join(" | "));
+    verifier("aucune camera ne filme dehors",
+             resume.conformite.every((c) => c.conforme),
+             resume.conformite.map((c) => `${c.camera}=${c.debordement_m2.toFixed(1)}`).join(" "));
     verifier("mention du statut", resume.mention === "COTES ESTIMEES", String(resume.mention));
 
-    // an unreachable IR range must empty the night coverage
+    // an IR range of one metre leaves only what sits against the camera
     const myope = JSON.parse(JSON.stringify(catalogue));
     Object.values(myope).forEach((m) => { m.portee_ir_m = 1.0; });
     const nuit = JSON.parse(analyser(JSON.stringify({ plan, catalogue: myope, nuit: true })).resume);
-    verifier("la nuit coupe à la portée IR", nuit.statistiques.au_moins_m2[0] === 0,
-             String(nuit.statistiques.au_moins_m2[0]));
+    verifier("la nuit coupe à la portée IR",
+             nuit.statistiques.au_moins_m2[0] < 0.02 * st.au_moins_m2[0],
+             `${nuit.statistiques.au_moins_m2[0].toFixed(2)} contre ${st.au_moins_m2[0].toFixed(1)}`);
 
     // scripted editing session, the same keys the page binds
     const etat = { plan: JSON.parse(JSON.stringify(plan)), clesModeles: Object.keys(catalogue).sort(),
@@ -97,6 +106,19 @@ async function lancer()
         message = String(e.message || e);
     }
     verifier("modèle inconnu refusé", message.includes("absent du catalogue"), message);
+
+    // the search the worker carries, called here in line : a worker never answers
+    // under the virtual clock this page is driven with
+    const proposition = JSON.parse(placer(JSON.stringify(
+        { plan, catalogue, modeles: ["dahua-2441-28"], nb_cameras: 1, pas_grille: 0.8,
+          pas_azimut: 90, hauteurs: [2.2], inclinaisons: [30] })));
+    verifier("le solveur propose une pose", proposition.poses.length === 1,
+             String(proposition.poses.length));
+    const propose = JSON.parse(JSON.stringify(plan));
+    propose.cameras = proposition.poses;
+    const verdict = JSON.parse(analyser(requete(propose, false)).resume);
+    verifier("elle ne filme pas dehors", verdict.conformite.every((c) => c.conforme),
+             verdict.conformite.map((c) => c.debordement_m2.toFixed(2)).join(" "));
 
     const rates = resultats.filter((r) => r.startsWith("RATE")).length;
     document.getElementById("sortie").textContent =

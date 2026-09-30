@@ -24,10 +24,12 @@
         <label class="fichier">Ouvrir plan<input type="file" id="fichier-plan" accept=".yaml,.yml"></label>
         <label class="fichier">Ouvrir catalogue<input type="file" id="fichier-catalogue" accept=".yaml,.yml"></label>
         <button id="bascule-nuit">Nuit</button>
+        <button id="proposer">Proposer</button>
         <button id="exporter-image">Exporter image</button>
         <button id="exporter-plan">Exporter plan</button>
     </div>
     <p class="alerte" id="erreur"></p>
+    <p class="note" id="proposition"></p>
 
     <h2>Caméra</h2>
     <div class="ligne">
@@ -49,6 +51,10 @@
 
     <h2>Points de passage</h2>
     <div id="verdicts"></div>
+
+    <h2>Hors parcelle</h2>
+    <p class="note">Une caméra privée ne filme ni la voie ni chez le voisin</p>
+    <table id="conformite"></table>
 
     <h2>Modèles</h2>
     <p class="note">Une ligne remplace le modèle sur toutes les caméras</p>
