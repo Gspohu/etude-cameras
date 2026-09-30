@@ -5,6 +5,7 @@ import init, { analyser, catalogue_defaut, charger_catalogue, charger_plan, nive
 import { appliquerTouche, attraper, camera, changerModele, deplacer, relacher, tourner }
     from "./edition.js";
 import { couleursDori, dessiner, vue } from "./rendu.js";
+import * as panneau from "./panneau.js";
 
 
 const toile = document.getElementById("carte");
@@ -19,6 +20,9 @@ let comparaisonEnCours = null;
 
 // the comparison table reads in percent, 30 cm of grid is plenty for that
 const PAS_COMPARAISON = 0.3;
+
+// TODO dragging a camera recomputes the whole grid on the main thread, a large
+// plan would need the engine in a worker
 
 // null keeps the step the plan declares : the page and the command line then
 // count the same surfaces
@@ -97,116 +101,20 @@ function recalculer()
     }, 200);
 }
 
-function pourcent(v)
-{
-    return `${(100 * v).toFixed(1)} %`;
-}
-
-
-// A plan comes from a file the visitor opens, and its names land in the panel
-// Building nodes and setting their text keeps a camera called <img onerror=...>
-// a camera name and nothing else
-function noeud(balise, texte = "", classe = "")
-{
-    const e = document.createElement(balise);
-    if (classe)
-    {
-        e.className = classe;
-    }
-    if (texte !== "")
-    {
-        e.textContent = texte;
-    }
-    return e;
-}
-
-function rang(cellules, entete = false)
-{
-    const tr = noeud("tr");
-    cellules.forEach((c) =>
-    {
-        const cel = noeud(entete ? "th" : "td", typeof c === "string" ? c : "");
-        if (typeof c !== "string")
-        {
-            cel.append(...c);
-        }
-        tr.append(cel);
-    });
-    return tr;
-}
-
-function vider(id)
-{
-    const e = document.getElementById(id);
-    e.replaceChildren();
-    return e;
-}
 
 
 function remplirPanneau(resume)
 {
     const niveauxDori = JSON.parse(niveaux_dori());
-    const st = resume.statistiques;
-    const couleurs = couleursDori();
-    // assembled off the document : appending into a live container lays the
-    // panel out once per row
-    const lot = document.createDocumentFragment();
-    lot.append(rang(["Surveillé", `${st.surface_m2.toFixed(0)} m²`, ""], true));
-    niveauxDori.forEach((n, i) =>
-    {
-        const pastille = noeud("span", "", "pastille");
-        pastille.style.background = couleurs[i];
-        lot.append(rang([[pastille, document.createTextNode(n[1])],
-                         `${st.au_moins_m2[i].toFixed(1)} m²`,
-                         pourcent(st.au_moins_m2[i] / st.surface_m2)]));
-    });
-    lot.append(rang(["2 caméras ou plus", `${st.redondance_m2.toFixed(1)} m²`,
-                     pourcent(st.redondance_m2 / st.surface_m2)]));
-    vider("statistiques").append(lot);
-
-    const verdicts = document.createDocumentFragment();
-    if (resume.verdicts.length === 0)
-    {
-        verdicts.append(noeud("p", "Aucun point de passage dans ce plan", "note"));
-    }
-    resume.verdicts.forEach((v) =>
-    {
-        const atteint = v.meilleur === 0 ? "rien" : niveauxDori[v.meilleur - 1][1];
-        const bloc = noeud("div", "", `verdict ${v.ok ? "ok" : "manque"}`);
-        bloc.append(noeud("strong", v.nom),
-                    document.createTextNode(` : ${atteint}, requis ${niveauxDori[v.requis - 1][1]}`));
-        if (v.conseil)
-        {
-            bloc.append(noeud("div", v.conseil, "conseil"));
-        }
-        verdicts.append(bloc);
-    });
-    vider("verdicts").append(verdicts);
-
-
+    panneau.statistiques(resume.statistiques, niveauxDori, couleursDori());
+    panneau.verdicts(resume.verdicts, niveauxDori);
     const c = camera(etat);
     if (c !== null)
     {
-        document.getElementById("choix-camera").value = c.nom;
-        document.getElementById("choix-modele").value = c.modele;
-        document.getElementById("azimut").value = Math.round(c.azimut);
-        document.getElementById("inclinaison").value = Math.round(c.inclinaison);
-        document.getElementById("hauteur").value = c.hauteur.toFixed(1);
-        const m = catalogue[c.modele];
-        const ir = m.portee_ir_m === null ? "IR inconnue" : `IR ${m.portee_ir_m} m`;
-        const portees = niveauxDori.map((n, i) =>
-        {
-            return `${n[1]} ${m.portees[i].toFixed(1)} m`;
-        }).join(", ");
-        document.getElementById("fiche-modele").textContent =
-            `${m.hfov} x ${m.vfov}°, ${m.largeur_px} px, ${ir}, ${portees}`
-            + (m.verifie ? "" : "  [fiche non vérifiée]");
+        panneau.ficheCamera(c, catalogue[c.modele], niveauxDori);
     }
     document.getElementById("cible").value = resume.hauteur_cible.toFixed(1);
-    document.getElementById("titre").textContent = etat.plan.nom;  
-    document.getElementById("statut").textContent = etat.plan.statut === "releve"
-        ? "Cotes relevées" : "Cotes arbitraires, aucun résultat n'engage le terrain";
-    document.getElementById("bascule-nuit").classList.toggle("actif", etat.nuit);
+    panneau.entete(etat.plan, etat.nuit);
 }
 
 function ligneComparaison(cle)
@@ -239,14 +147,15 @@ function souffler()
 async function comparer()
 {
     const niveauxDori = JSON.parse(niveaux_dori());
-    const rangs = [rang(["Modèle", "Coût", niveauxDori[2][1], niveauxDori[3][1], "Points"], true)];
+    const rangs = [panneau.rang(["Modèle", "Coût", niveauxDori[2][1], niveauxDori[3][1], "Points"],
+                                true)];
     const marque = Symbol("comparaison");
     comparaisonEnCours = marque;
     for (const cle of etat.clesModeles)
     {
         const l = ligneComparaison(cle);
-        const tr = rang([catalogue[l.cle].nom, l.cout, pourcent(l.reconnaitre),
-                         pourcent(l.identifier), `${l.tenus}/${l.total}`]);
+        const tr = panneau.rang([catalogue[l.cle].nom, l.cout, panneau.pourcent(l.reconnaitre),
+                                 panneau.pourcent(l.identifier), `${l.tenus}/${l.total}`]);
         tr.dataset.cle = l.cle;
         rangs.push(tr);
         await souffler();
@@ -256,7 +165,7 @@ async function comparer()
         }
     }
     // one write at the end : writing per model laid the whole panel out eight times
-    vider("comparaison").append(...rangs);
+    panneau.comparaison(rangs);
 }
 
 function telecharger(nom, contenu, type)
@@ -296,14 +205,10 @@ function poserCatalogue(texte)
     catalogueJson = charger_catalogue(texte);
     catalogue = JSON.parse(catalogueJson);
     etat.clesModeles = Object.keys(catalogue).sort();
-    const lot = document.createDocumentFragment();
-    etat.clesModeles.forEach((cle) =>
+    panneau.options("choix-modele", etat.clesModeles, (cle) =>
     {
-        const option = noeud("option", catalogue[cle].nom);
-        option.value = cle;
-        lot.append(option);
+        return catalogue[cle].nom;
     });
-    vider("choix-modele").append(lot);
 }
 
 
@@ -312,16 +217,32 @@ function poserPlan(texte, nom)
     etat.plan = JSON.parse(charger_plan(texte, catalogueJson, nom));
     etat.selection = 0;
     etat.hauteurCible = null;
-    const lot = document.createDocumentFragment();
-    etat.plan.cameras.forEach((c) =>
+    panneau.options("choix-camera", etat.plan.cameras.map((c) =>
     {
-        const option = noeud("option", c.nom);
-        option.value = c.nom;
-        lot.append(option);
+        return c.nom;
+    }), (nom) =>
+    {
+        return nom;
     });
-    vider("choix-camera").append(lot);
 }
 
+
+function surFichier(id, poser)
+{
+    document.getElementById(id).addEventListener("change", async (ev) =>
+    {
+        const f = ev.target.files[0];
+        try
+        {
+            poser(await f.text(), f.name.replace(/\.[^.]+$/, ""));
+            recalculer();
+        }
+        catch (e)
+        {
+            signaler(e);
+        }
+    });
+}
 
 function coordonnees(ev)
 {
@@ -442,31 +363,13 @@ function brancher()
     });
 
 
-    document.getElementById("fichier-plan").addEventListener("change", async (ev) =>
+    surFichier("fichier-plan", (texte, nom) =>
     {
-        const f = ev.target.files[0];
-        try
-        {
-            poserPlan(await f.text(), f.name.replace(/\.[^.]+$/, ""));
-            recalculer();
-        }
-        catch (e)
-        {
-            signaler(e);
-        }
+        poserPlan(texte, nom);
     });
-    document.getElementById("fichier-catalogue").addEventListener("change", async (ev) =>
+    surFichier("fichier-catalogue", (texte) =>
     {
-        const f = ev.target.files[0];
-        try
-        {
-            poserCatalogue(await f.text());
-            recalculer();
-        }
-        catch (e)
-        {
-            signaler(e);
-        }
+        poserCatalogue(texte);
     });
 
 

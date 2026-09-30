@@ -4,7 +4,7 @@ const ALPHA_ZONES = 0.55;
 
 
 // Reading a custom property forces a style recalculation, and the renderer asks
-// for the same dozen tokens on every frame. The page has one theme, so read once
+// for the same dozen tokens on every frame. One theme per page, one read each
 const _jetons = new Map();
 
 

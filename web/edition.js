@@ -10,7 +10,7 @@ export function camera(etat)
 }
 
 
-// Select the acmera nearest to the click, within rayon mteres
+// Select the acmera nearest to the click, within rayon metres of the cible
 export function attraper(etat, x, y, rayon = 1.2)
 {
     let meilleur = null;
