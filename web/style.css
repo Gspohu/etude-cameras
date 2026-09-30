@@ -1,0 +1,300 @@
+/* Design system toens copied from the vault referecne */
+:root
+{
+    --colour-bg-primary: #0f0f1a;
+    --colour-bg-surface: #1a1a2e;
+    --colour-bg-surface-hover: #242440;
+    --colour-bg-surface-raised: #2a2a4a;
+    --colour-text-primary: #f0f0f5;
+    --colour-text-secondary: #9191b0;
+    --colour-text-muted: #9191b2;
+    --colour-accent: #1c7aaf;
+    --colour-accent-hover: #2388bf;
+    --colour-aubergine: #8a5cb8;
+    --colour-success: #4cbb7c;
+    --colour-warning: #e2884c;
+    --colour-danger: #c84555;
+    --colour-border: #333355;
+    --colour-border-hover: #4a4a6a;
+
+
+    --font-sans: "Ubuntu", -apple-system, "Segoe UI", system-ui, sans-serif;
+    --font-mono: "Ubuntu Mono", "JetBrains Mono", monospace;
+    --space-2xs: 0.125rem;
+    --space-xs: 0.25rem;
+    --space-2: 0.5rem;
+    --space-3: 0.75rem;
+    --space-4: 1rem;
+    --radius: 4px;
+}
+
+
+*
+{
+    box-sizing: border-box;
+}
+
+body
+{
+    margin: 0;
+    height: 100vh;   
+    display: grid;
+    grid-template-columns: 1fr 24rem;
+    background: var(--colour-bg-primary);
+    color: var(--colour-text-primary);
+    font-family: var(--font-sans);
+    font-size: 14px;
+}
+
+main
+{
+    min-width: 0;
+    min-height: 0;
+}
+
+#carte
+{
+    width: 100%;
+    height: 100%;
+    display: block;
+    cursor: crosshair;
+}
+
+/* the panel fills in once the engine has answered, and a table appearing late
+   pushes everything under it */
+#verdicts
+{
+    min-height: 11rem;
+}
+
+#statistiques
+{
+    min-height: 10.5rem;
+}
+
+#fiche-modele
+{
+    min-height: 3.6rem;
+}
+
+/* A phone cannot give a fifth of its width to the map and still show it */
+@media (max-width: 900px)
+{
+    body
+    {
+        grid-template-columns: 1fr;
+        grid-template-rows: 60vh 1fr;
+        height: auto;
+        min-height: 100vh;
+    }
+
+    #panneau
+    {
+        border-left: none;
+        border-top: 1px solid var(--colour-border);
+    }
+}
+
+#comparaison
+{
+    min-height: 16rem;
+}
+
+
+#panneau
+{
+    /* a grid item is as wide as its content unless told otherwise, and the
+       panel was dragging the whole page past the edge of a phone */
+    min-width: 0;
+    overflow-y: auto;
+    /* the bar appears once the engine has answered, and it shoves the whole
+       panel sideways unless its lane is booked from the start */
+    scrollbar-gutter: stable;
+    padding: var(--space-4);
+    background: var(--colour-bg-surface);
+    border-left: 1px solid var(--colour-border);
+}
+
+h1
+{
+    font-size: 1.1rem;
+    margin: 0 0 var(--space-2);
+}
+
+
+h2
+{
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--colour-text-secondary);
+    margin: var(--space-4) 0 var(--space-2);
+}
+
+
+button, select, input[type="number"], label.fichier
+{
+    font-family: inherit;
+    font-size: 0.85rem;
+    color: var(--colour-text-primary);
+    background: var(--colour-bg-surface-raised);
+    border: 1px solid var(--colour-border);
+    border-radius: var(--radius);
+    padding: 0.35rem 0.6rem;
+    cursor: pointer;
+}
+
+
+button:hover, label.fichier:hover
+{
+    background: var(--colour-bg-surface-hover);
+    border-color: var(--colour-border-hover);
+}
+
+button.actif
+{
+    background: var(--colour-accent);
+    border-color: var(--colour-accent-hover);
+}
+
+
+input[type="file"]
+{
+    display: none;
+}
+
+
+.barre
+{
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+}
+
+.ligne
+{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    margin-bottom: var(--space-xs);
+}
+
+
+.ligne input[type="number"]
+{
+    width: 5.5rem;
+}
+
+/* the model name arrives with the catalogue, and a select free to grow pushes
+   its neighbour onto a second row */
+.ligne select
+{
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+table
+{
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+}
+
+th
+{
+    text-align: right;
+    font-weight: 500;
+    color: var(--colour-text-secondary);
+    padding: var(--space-2xs) var(--space-xs);
+}
+
+th:first-child, td:first-child
+{
+    text-align: left;
+}
+
+
+td
+{
+    text-align: right;
+    padding: var(--space-2xs) var(--space-xs);
+    border-top: 1px solid var(--colour-border);
+    white-space: nowrap;
+}
+
+
+td:first-child
+{
+    white-space: normal;   
+    font-size: 0.74rem;
+    line-height: 1.25;
+}
+
+
+tbody tr
+{
+    cursor: pointer;
+}
+
+
+tbody tr:hover
+{
+    background: var(--colour-bg-surface-hover);
+}
+
+
+.pastille
+{
+    display: inline-block;
+    width: 0.75rem;
+    height: 0.75rem;
+    border-radius: 2px;
+    margin-right: 0.4rem;
+    vertical-align: -1px;
+}
+
+.verdict
+{
+    border-left: 3px solid var(--colour-border);
+    padding: 0.2rem 0 0.2rem 0.5rem;
+    margin-bottom: 0.4rem;
+}
+
+
+.verdict.ok
+{
+    border-color: var(--colour-success);
+}
+
+
+.verdict.manque
+{
+    border-color: var(--colour-danger);
+}   
+
+
+.conseil, .aide, .note
+{
+    color: var(--colour-text-secondary);
+    font-size: 0.78rem;
+    line-height: 1.45;
+}
+
+
+.alerte  
+{
+    color: var(--colour-warning);
+    font-size: 0.78rem;
+}
+
+
+kbd
+{
+    font-family: var(--font-mono);
+    background: var(--colour-bg-surface-raised);
+    border: 1px solid var(--colour-border);
+    border-radius: 3px;
+    padding: 0 0.25rem;
+}

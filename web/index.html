@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Champ de vision et zones DORI de caméras de surveillance sur un plan, calcul dans le navigateur">
+<title>Champ de vision des caméras</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='%231c7aaf' d='M1 13 8 3l7 10z'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+<link rel="modulepreload" href="pkg/champ.js">
+<link rel="preload" href="pkg/champ_bg.wasm" as="fetch" type="application/wasm" crossorigin>
+</head>
+<body>
+
+<main>
+    <canvas id="carte">Carte des zones couvertes, dessinée à partir du plan chargé</canvas>
+</main>
+
+<aside id="panneau">
+    <h1 id="titre">Champ de vision</h1>
+    <p class="note" id="statut"></p>
+
+    <div class="barre">
+        <label class="fichier">Ouvrir plan<input type="file" id="fichier-plan" accept=".yaml,.yml"></label>
+        <label class="fichier">Ouvrir catalogue<input type="file" id="fichier-catalogue" accept=".yaml,.yml"></label>
+        <button id="bascule-nuit">Nuit</button>
+        <button id="exporter-image">Exporter image</button>
+        <button id="exporter-plan">Exporter plan</button>
+    </div>
+    <p class="alerte" id="erreur"></p>
+
+    <h2>Caméra</h2>
+    <div class="ligne">
+        <select id="choix-camera" aria-label="Caméra"></select>
+        <select id="choix-modele" aria-label="Modèle"></select>
+    </div>
+    <div class="ligne"><label for="azimut">Azimut</label>
+        <input type="number" id="azimut" step="1"></div>
+    <div class="ligne"><label for="inclinaison">Inclinaison</label>
+        <input type="number" id="inclinaison" step="1"></div>
+    <div class="ligne"><label for="hauteur">Hauteur</label>
+        <input type="number" id="hauteur" step="0.1"></div>
+    <div class="ligne"><label for="cible">Cible</label>
+        <input type="number" id="cible" step="0.1"></div>
+    <p class="note" id="fiche-modele"></p>
+
+    <h2>Couverture</h2>
+    <table id="statistiques"></table>
+
+    <h2>Points de passage</h2>
+    <div id="verdicts"></div>
+
+    <h2>Modèles</h2>
+    <p class="note">Une ligne remplace le modèle sur toutes les caméras</p>
+    <table id="comparaison"></table>
+
+    <h2>Commandes</h2>
+    <p class="aide">
+        Glisser une caméra pour la déplacer, molette pour l'orienter
+        (<kbd>maj</kbd> au degré). <kbd>tab</kbd> caméra suivante,
+        <kbd>m</kbd> modèle suivant, <kbd>n</kbd> jour ou nuit,
+        <kbd>e</kbd> image, <kbd>s</kbd> plan.
+    </p>
+</aside>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

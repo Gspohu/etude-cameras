@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Essais du moteur web</title>
+</head>
+<body>
+<pre id="sortie">essais en cours...</pre>
+
+<script type="module">
+import init, { analyser, catalogue_defaut, charger_catalogue, charger_plan, plan_defaut,
+               plan_vers_yaml } from "./pkg/champ.js";
+import { appliquerTouche, attraper, camera, deplacer, relacher, tourner } from "./edition.js";
+
+const resultats = [];
+
+function verifier(nom, condition, detail = "")
+{
+    resultats.push(`${condition ? "OK  " : "RATE"} ${nom}${detail ? " : " + detail : ""}`);
+}
+
+function proche(a, b, tolerance = 0.05)
+{
+    return Math.abs(a - b) <= tolerance;
+}
+
+async function lancer()
+{
+    await init();
+    const catalogueJson = charger_catalogue(catalogue_defaut());
+    const catalogue = JSON.parse(catalogueJson);
+    verifier("portées de la Dahua 2,8 mm",
+             catalogue["dahua-2441-28"].portees.map((p) => Math.round(p * 10) / 10)
+                 .join(" ") === "49.3 19.7 9.9 4.9",
+             catalogue["dahua-2441-28"].portees.map((p) => p.toFixed(1)).join(" "));
+
+    const plan = JSON.parse(charger_plan(plan_defaut(), catalogueJson, "Exemple"));
+    const requete = (p, nuit = false) => JSON.stringify({ plan: p, catalogue, nuit });
+    const resume = JSON.parse(analyser(requete(plan)).resume);
+    const st = resume.statistiques;
+
+    // the very numbers the Python command line prints on the same plan
+    verifier("surface surveillée", proche(st.surface_m2, 525.0), st.surface_m2.toFixed(1));
+    verifier("surfaces DORI",
+             [242.8, 223.8, 106.9, 30.0].every((v, i) => proche(st.au_moins_m2[i], v)),
+             st.au_moins_m2.map((v) => v.toFixed(1)).join(" "));
+    verifier("verdicts", resume.verdicts.filter((v) => v.ok).length === 2,
+             resume.verdicts.map((v) => `${v.nom}=${v.ok}`).join(" "));
+    verifier("conseil sur le portail",
+             resume.verdicts[0].conseil.includes("moins de 4.9 m"), resume.verdicts[0].conseil);
+
+    // an unreachable IR range must empty the night coverage
+    const myope = JSON.parse(JSON.stringify(catalogue));
+    Object.values(myope).forEach((m) => { m.portee_ir_m = 1.0; });
+    const nuit = JSON.parse(analyser(JSON.stringify({ plan, catalogue: myope, nuit: true })).resume);
+    verifier("la nuit coupe à la portée IR", nuit.statistiques.au_moins_m2[0] === 0,
+             String(nuit.statistiques.au_moins_m2[0]));
+
+    // scripted editing session, the same keys the page binds
+    const etat = { plan: JSON.parse(JSON.stringify(plan)), clesModeles: Object.keys(catalogue).sort(),
+                   selection: 0, nuit: false, glisse: false };
+    const cible = etat.plan.cameras[1];
+    verifier("attraper la caméra visée", attraper(etat, cible.x + 0.3, cible.y - 0.3) === 1);
+    deplacer(etat, 10, 18);
+    relacher(etat);
+    verifier("glisser-déposer", camera(etat).x === 10 && camera(etat).y === 18,
+             `${camera(etat).x} ${camera(etat).y}`);
+    verifier("le relâchement fige", !deplacer(etat, 0, 0));
+    const azimut = camera(etat).azimut;
+    tourner(etat, 5);
+    verifier("molette", camera(etat).azimut === (azimut + 5) % 360);
+    appliquerTouche(etat, "ArrowLeft", true);
+    verifier("flèche au degré", camera(etat).azimut === (azimut + 4) % 360);
+    const modele = camera(etat).modele;
+    appliquerTouche(etat, "m");
+    appliquerTouche(etat, "M");
+    verifier("modèle suivant puis précédent", camera(etat).modele === modele);
+    verifier("jour et nuit", appliquerTouche(etat, "n") === "recalculer" && etat.nuit);
+    verifier("touche d'export", appliquerTouche(etat, "e") === "exporter");
+    verifier("touche inconnue ignorée", appliquerTouche(etat, "z") === null);
+
+    const yaml = plan_vers_yaml(JSON.stringify(etat.plan));
+    verifier("export YAML relisible",
+             JSON.parse(charger_plan(yaml, catalogueJson, "relu")).cameras.length === 2);
+
+    // an invalid plan must be refused with a readable message
+    let message = "";
+    try
+    {
+        charger_plan("limite: [[0,0],[1,0],[1,1]]\ncameras:\n  - {nom: a, modele: bidon, "
+                     + "position: [0,0], hauteur: 2, azimut: 0}\n", catalogueJson, "x");
+    }
+    catch (e)
+    {
+        message = String(e.message || e);
+    }
+    verifier("modèle inconnu refusé", message.includes("absent du catalogue"), message);
+
+    const rates = resultats.filter((r) => r.startsWith("RATE")).length;
+    document.getElementById("sortie").textContent =
+        resultats.join("\n") + `\n\nBILAN ${resultats.length - rates}/${resultats.length}`;
+}
+
+lancer().catch((e) =>
+{
+    document.getElementById("sortie").textContent = `RATE exception : ${e.message || e}\n${e.stack}`;
+});
+</script>
+</body>
+</html>
