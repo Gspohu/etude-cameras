@@ -107,6 +107,8 @@ class Plan:
     pas: float = 0.1
     # width of the band looked at past the boundary, it sets what counts as filmed outside
     marge_hors: float = 12.0
+    # the ground worth watching, empty when the whole plot counts
+    zone: list = field(default_factory=list)
 
     @property
     def cotes_arbitraires(self):
@@ -229,7 +231,8 @@ def charger_plan(chemin, catalogue):
         raise ErreurPlan(str(e)) from None
     d = json.loads(brut)
     plan = Plan(nom=d["nom"], statut=d["statut"], limite=[tuple(p) for p in d["limite"]],
-                hauteur_cible=d["hauteur_cible"], pas=d["pas"], marge_hors=d["marge_hors"])
+                hauteur_cible=d["hauteur_cible"], pas=d["pas"], marge_hors=d["marge_hors"],
+                zone=[tuple(p) for p in d.get("zone", [])])
     plan.obstacles = [Obstacle(nom=o["nom"], type=o["type"], points=[tuple(p) for p in o["points"]],
                                hauteur=o["hauteur"], ferme=o["ferme"], opaque=o["opaque"],
                                base=o["base"]) for o in d["obstacles"]]
@@ -247,6 +250,7 @@ def _plan_dict(plan):
     return {
         "nom": plan.nom, "statut": plan.statut, "limite": [list(p) for p in plan.limite],
         "hauteur_cible": plan.hauteur_cible, "pas": plan.pas, "marge_hors": plan.marge_hors,
+        "zone": [list(p) for p in plan.zone],
         "obstacles": [{"nom": o.nom, "type": o.type, "points": [list(p) for p in o.points],
                        "hauteur": o.hauteur, "base": o.base, "ferme": o.ferme,
                        "opaque": o.opaque} for o in plan.obstacles],
@@ -281,11 +285,16 @@ def _verdicts(brut):
     return sortie
 
 
-def analyser(plan, catalogue, pas=None, nuit=False, hauteur_cible=None):
+def _moteur(appel, *args):
+    """Every call into the engine answers the same way when the plan is wrong"""
     try:
-        a = champ_rs.analyser(_requete(plan, catalogue, pas, nuit, hauteur_cible))
+        return appel(*args)
     except ValueError as e:
         raise ErreurPlan(str(e)) from None
+
+
+def analyser(plan, catalogue, pas=None, nuit=False, hauteur_cible=None):
+    a = _moteur(champ_rs.analyser, _requete(plan, catalogue, pas, nuit, hauteur_cible))
     r = json.loads(a.resume)
     forme = (r["ny"], r["nx"])
     utile = np.frombuffer(a.utile(), dtype=np.uint8).reshape(forme).astype(bool)
@@ -320,19 +329,13 @@ def placer(plan, catalogue, nb_cameras=None, modeles=None, pas_grille=0.3,
         requete["hauteurs"] = list(hauteurs)
     if inclinaisons:
         requete["inclinaisons"] = list(inclinaisons)
-    try:
-        p = json.loads(champ_rs.placer(json.dumps(requete)))
-    except ValueError as e:
-        raise ErreurPlan(str(e)) from None
+    p = json.loads(_moteur(champ_rs.placer, json.dumps(requete)))
     p["poses"] = [Pose(**q) for q in p["poses"]]
     return p
 
 
 def verifier_points(plan, catalogue, nuit=False):
-    try:
-        brut = champ_rs.verifier(_requete(plan, catalogue, nuit=nuit))
-    except ValueError as e:
-        raise ErreurPlan(str(e)) from None
+    brut = _moteur(champ_rs.verifier, _requete(plan, catalogue, nuit=nuit))
     return _verdicts(json.loads(brut))
 
 
@@ -340,10 +343,7 @@ def diagnostiquer(plan, catalogue, camera, x, y, hauteur=None, nuit=False):
     requete = json.dumps({"plan": _plan_dict(plan),
                           "catalogue": json.loads(_catalogue_json(catalogue)),
                           "camera": camera, "x": x, "y": y, "hauteur": hauteur, "nuit": nuit})
-    try:
-        d = json.loads(champ_rs.diagnostiquer(requete))
-    except ValueError as e:
-        raise ErreurPlan(str(e)) from None
+    d = json.loads(_moteur(champ_rs.diagnostiquer, requete))
     return DiagnosticCamera(camera=camera, **d)
 
 
