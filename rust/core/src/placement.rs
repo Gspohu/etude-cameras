@@ -6,8 +6,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::analyse::conformite;
 use crate::modele::{niveau, ModeleCamera, NIVEAUX_DORI};
-use crate::scene::{Plan, Pose};
-use crate::visibilite::{calculer, diagnostiquer};
+use crate::scene::{Obstacle, Plan, Pose};
+use crate::visibilite::{calculer, dans_polygone, diagnostiquer};
 
 #[derive(Deserialize)]
 pub struct Reglages
@@ -34,9 +34,10 @@ pub struct Reglages
     pub pas_grille: f64,
 }
 
+// 2 m is the top of a standard fence, without it nothing can hang on one
 fn hauteurs_par_defaut() -> Vec<f64>
 {
-    return vec![2.2, 2.5, 2.8, 3.2];
+    return vec![2.0, 2.2, 2.5, 2.8, 3.2];
 }
 
 fn inclinaisons_par_defaut() -> Vec<f64>
@@ -98,35 +99,46 @@ pub struct Ancrage
 }
 
 
-// Negative on a ring wound clockwise, which is how a plan is often saisi
-fn aire_signee(points: &[[f64; 2]]) -> f64
+// A bracket goes on a closed building, on a wall or on a fence post. A hedge
+// carries nothing, and the ground inside a building is not walked on
+fn porte_une_camera(ob: &Obstacle) -> bool
 {
-    let mut total = 0.0;
-    for i in 0..points.len()
-    {
-        let a = points[i];
-        let b = points[(i + 1) % points.len()];
-        total += a[0] * b[1] - b[0] * a[1];
-    }
-    return total / 2.0;
+    return ob.exclu_surface() || ob.genre == "mur" || ob.genre == "cloture";
 }
 
-// Mounting points : along the walls of every building, a step apart, pushed
-// slightly outside so the wall it hangs on never hides the camera
+// Ground the plot owns and nothing is built on, the only place a camera stands
+fn sol_utile(plan: &Plan, x: f64, y: f64) -> bool
+{
+    if !dans_polygone(x, y, &plan.limite)
+    {
+        return false;
+    }
+    for ob in &plan.obstacles
+    {
+        if (ob.exclu_surface() && dans_polygone(x, y, &ob.points))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+// Mounting points along every wall and fence, a step apart, pushed off the face
+// by a hand's width. Which face is read off the plan rather than guessed : a
+// building is watched from outside, a boundary fence from inside, and a ring
+// saisi clockwise would send every anchor the wrong way
 pub fn ancrages(plan: &Plan, ecart: f64) -> Vec<Ancrage>
 {
     let mut sortie = Vec::new();
     for ob in &plan.obstacles
     {
-        if !ob.exclu_surface()
+        if !porte_une_camera(ob)
         {
             continue;
         }
         let pts = &ob.points;
-        // reading the winding off the signed area, a clockwise ring turns the
-        // outward normal inwards and buries every anchor in the wall
-        let sens = if (aire_signee(pts) < 0.0) { -1.0 } else { 1.0 };
-        for i in 0..pts.len()
+        let aretes = if ob.ferme { pts.len() } else { pts.len().saturating_sub(1) };
+        for i in 0..aretes
         {
             let a = pts[i];
             let b = pts[(i + 1) % pts.len()];
@@ -137,14 +149,21 @@ pub fn ancrages(plan: &Plan, ecart: f64) -> Vec<Ancrage>
                 continue;
             }
             let (ux, uy) = (dx / longueur, dy / longueur);
-            let (nx, ny) = (uy * sens, -ux * sens);
+            let (nx, ny) = (uy, -ux);
             let nombre = (longueur / ecart).floor() as usize;
             for k in 0..=nombre
             {
                 let s = (k as f64) * ecart;
-                sortie.push(Ancrage { x: a[0] + ux * s + nx * 0.25,
-                                      y: a[1] + uy * s + ny * 0.25,
-                                      plafond: ob.hauteur });
+                for signe in [1.0, -1.0]
+                {
+                    let x = a[0] + ux * s + nx * 0.25 * signe;
+                    let y = a[1] + uy * s + ny * 0.25 * signe;
+                    if sol_utile(plan, x, y)
+                    {
+                        sortie.push(Ancrage { x, y, plafond: ob.hauteur });
+                        break;
+                    }
+                }
             }
         }
     }

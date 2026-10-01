@@ -239,6 +239,36 @@ fn ancrages_sortent_du_batiment_saisi_dans_les_deux_sens() -> Essai
 
 
 #[test]
+fn une_cloture_porte_une_camera_du_bon_cote() -> Essai
+{
+    // sans aucun bâtiment, la clôture est le seul support, et une pose posée
+    // sur sa face extérieure tomberait chez le voisin
+    let cat = catalogue()?;
+    let cloture = Obstacle { nom: "cloture".into(), genre: "cloture".into(),
+                             points: vec![[0.0, -10.0], [40.0, -10.0], [40.0, 10.0], [0.0, 10.0]],
+                             hauteur: 2.0, base: 0.0, ferme: true, opaque: true };
+    let mut plan = terrain(vec![cloture], 2.8, 0.0);
+    plan.cameras.clear();
+    let poses = crate::placement::ancrages(&plan, 2.0);
+    assert!(!poses.is_empty(), "aucun ancrage sur la clôture");
+    for a in &poses
+    {
+        assert!(crate::visibilite::dans_polygone(a.x, a.y, &plan.limite),
+                "ancrage ({:.2}, {:.2}) hors de la parcelle", a.x, a.y);
+        assert_eq!(a.plafond, 2.0);
+    }
+    let reglages: crate::placement::Reglages = serde_json::from_str(
+        "{\"nb_cameras\": 1, \"modeles\": [\"dahua-2441-28\"], \"pas_grille\": 0.8, \
+          \"pas_azimut\": 90, \"inclinaisons\": [30]}")
+        .map_err(|e| e.to_string())?;
+    let p = crate::placement::placer(&plan, &cat, &reglages)?;
+    assert_eq!(p.poses.len(), 1, "rien de posable sur une clôture de 2 m");
+    assert!(p.poses[0].hauteur <= 2.0, "posée à {} m", p.poses[0].hauteur);
+    return Ok(());
+}
+
+
+#[test]
 fn aucune_fixation_au_dessus_de_son_support() -> Essai
 {
     let cat = catalogue()?;
@@ -361,8 +391,8 @@ fn plan_exemple_se_charge() -> Essai
     assert_eq!(plan.points.len(), 2);
     let couv = calculer(&plan, &cat, None, false, None)?;
     let st = statistiques(&couv);
-    // la parcelle fait 349 m2, moins le projet et la maison existante
-    assert!((st.surface_m2 - 218.7).abs() < 2.0, "surface {}", st.surface_m2);
+    // la parcelle fait 349 m2, moins le projet, la maison existante et le cabanon
+    assert!((st.surface_m2 - 198.6).abs() < 2.0, "surface {}", st.surface_m2);
     return Ok(());
 }
 
