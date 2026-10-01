@@ -2,19 +2,24 @@
 
 import init, { analyser, catalogue_defaut, charger_catalogue, charger_plan, niveaux_dori,
                plan_defaut, plan_vers_yaml } from "./pkg/champ.js";
-import { ajouterCamera, appliquerTouche, attraper, camera, changerModele, deplacer, relacher,
-         supprimerCamera, tourner } from "./edition.js";
+import { ajouterCamera, appliquerTouche, attraper, camera, changerModele, commencerZone,
+         deplacer, effacerZone, etirerZone, finirZone, pointZone, relacher, supprimerCamera,
+         tourner } from "./edition.js";
 import { couleursDori, dessiner, vue } from "./rendu.js";
 import * as panneau from "./panneau.js";
 
 
 const toile = document.getElementById("carte");
 const etat = { plan: null, clesModeles: [], selection: 0, nuit: false, glisse: false,
-               hauteurCible: null };  
+               hauteurCible: null, trace: null };
 let catalogue = {};
 let catalogueJson = ("");
 let niveaux = [];
 let derniereVue = null;
+// a zone is dragged across the map, redrawing it has no business recomputing
+// the whole grid at every pointer move
+let dernierResume = null;
+let dernierHors = null;
 let attenteComparaison = null;
 let comparaisonEnCours = null;
 
@@ -85,7 +90,9 @@ function recalculer()
     erreur("");
     const resume = JSON.parse(analyse.resume);
     niveaux = analyse.niveau();
-    derniereVue = dessiner(toile, etat, catalogue, resume, niveaux, analyse.debordement());
+    dernierResume = resume;
+    dernierHors = analyse.debordement();
+    derniereVue = dessiner(toile, etat, catalogue, resume, niveaux, dernierHors);
     remplirPanneau(resume);
     clearTimeout(attenteComparaison);
     attenteComparaison = setTimeout(() =>
@@ -200,6 +207,40 @@ function exporterImage()
         telecharger(`carte_${etat.plan.nom}.png`, blob, "image/png");
     });
 }
+
+function etatZone(message)
+{
+    const trace = etat.trace !== null;
+    document.getElementById("zone-rect").classList.toggle("actif", trace
+        && etat.trace.mode === "rectangle");
+    document.getElementById("zone-poly").classList.toggle("actif", trace
+        && etat.trace.mode === "polygone");
+    document.getElementById("zone-fermer").hidden = !trace || etat.trace.mode !== "polygone";
+    document.getElementById("aide-zone").textContent = message;
+}
+
+
+function terminerTrace()
+{
+    const pose = finirZone(etat);
+    etatZone(pose ? "" : "Zone trop petite, recommencez");
+    if (pose)
+    {
+        recalculer();
+        return;
+    }
+    redessiner();
+}
+
+
+function redessiner()
+{
+    if (dernierResume !== null)
+    {
+        derniereVue = dessiner(toile, etat, catalogue, dernierResume, niveaux, dernierHors);
+    }
+}
+
 
 function listerCameras()
 {
@@ -364,6 +405,16 @@ function brancher()
     toile.addEventListener("pointerdown", (ev) =>
     {
         const [x, y] = coordonnees(ev);
+        if (etat.trace !== null)
+        {
+            pointZone(etat, x, y);
+            if (etat.trace.mode === "rectangle")
+            {
+                toile.setPointerCapture(ev.pointerId);
+            }
+            redessiner();
+            return;
+        }
         if (attraper(etat, x, y) !== null)
         {
             toile.setPointerCapture(ev.pointerId);
@@ -373,12 +424,25 @@ function brancher()
     toile.addEventListener("pointermove", (ev) =>
     {
         const [x, y] = coordonnees(ev);
+        if (etirerZone(etat, x, y))
+        {
+            redessiner();
+            return;
+        }
         if (deplacer(etat, x, y))
         {
             recalculer();
         }
     });
-    toile.addEventListener("pointerup", () => relacher(etat));
+    toile.addEventListener("pointerup", () =>
+    {
+        if (etat.trace !== null && etat.trace.mode === "rectangle")
+        {
+            terminerTrace();
+            return;
+        }
+        relacher(etat);
+    });
     toile.addEventListener("wheel", (ev) =>
     {
         ev.preventDefault();
@@ -482,6 +546,25 @@ function brancher()
         const delta = parseFloat(bouton.dataset.delta);
         c[champ] = champ === "azimut" ? (c.azimut + delta + 360) % 360
             : Math.max(-30, Math.min(90, c.inclinaison + delta));
+        recalculer();
+    });
+    document.getElementById("zone-rect").addEventListener("click", () =>
+    {
+        commencerZone(etat, "rectangle");
+        etatZone("Glissez sur la carte pour tracer la zone");
+        redessiner();
+    });
+    document.getElementById("zone-poly").addEventListener("click", () =>
+    {
+        commencerZone(etat, "polygone");
+        etatZone("Touchez chaque sommet, puis Fermer");
+        redessiner();
+    });
+    document.getElementById("zone-fermer").addEventListener("click", terminerTrace);
+    document.getElementById("zone-effacer").addEventListener("click", () =>
+    {
+        effacerZone(etat);
+        etatZone("");
         recalculer();
     });
     document.getElementById("proposer").addEventListener("click", proposer);

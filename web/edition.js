@@ -72,6 +72,108 @@ export function ajouterCamera(etat)
 }
 
 
+// The zone the cameras are paid to cover : a rectangle dragged across the map
+// or a polygon clicked point by point. Only the state knows, the page feeds it
+export function commencerZone(etat, mode)
+{
+    etat.trace = { mode, points: [] };
+}
+
+
+function arrondi(x, y)
+{
+    return [Math.round(x * 100) / 100, Math.round(y * 100) / 100];
+}
+
+
+export function pointZone(etat, x, y)
+{
+    if (etat.trace === null || etat.trace === undefined)
+    {
+        return false;
+    }
+    const p = arrondi(x, y);
+    if (etat.trace.mode === "rectangle")
+    {
+        etat.trace.points = [p, p];
+    }
+    else
+    {
+        etat.trace.points.push(p);
+    }
+    return true;
+}
+
+
+export function etirerZone(etat, x, y)
+{
+    const t = etat.trace;
+    if (!t || t.mode !== "rectangle" || t.points.length !== 2)
+    {
+        return false;
+    }
+    t.points[1] = arrondi(x, y);
+    return true;
+}
+
+
+export function coinsRectangle(a, b)
+{
+    return [[a[0], a[1]], [b[0], a[1]], [b[0], b[1]], [a[0], b[1]]];
+}
+
+
+// What the map outlines : the zone being drawn, else the one the plan carries
+export function zoneAffichee(etat)
+{
+    const t = etat.trace;
+    if (t && t.points.length > 0)
+    {
+        return t.mode === "rectangle" && t.points.length === 2
+            ? coinsRectangle(t.points[0], t.points[1]) : t.points;
+    }
+    return etat.plan.zone || [];
+}
+
+
+// A drag of a few centimetres is a misclick, not a zone
+export function finirZone(etat)
+{
+    const t = etat.trace;
+    etat.trace = null;
+    if (!t)
+    {
+        return false;
+    }
+    if (t.mode === "rectangle")
+    {
+        if (t.points.length !== 2
+            || Math.abs(t.points[0][0] - t.points[1][0]) < 0.5
+            || Math.abs(t.points[0][1] - t.points[1][1]) < 0.5)
+        {
+            return false;
+        }
+        etat.plan.zone = coinsRectangle(t.points[0], t.points[1]);
+        return true;
+    }
+    if (t.points.length < 3)
+    {
+        return false;
+    }
+    etat.plan.zone = t.points;
+    return true;
+}
+
+
+export function effacerZone(etat)
+{
+    const avait = (etat.plan.zone || []).length > 0;
+    etat.plan.zone = [];
+    etat.trace = null;
+    return avait;
+}
+
+
 export function supprimerCamera(etat)
 {
     if (etat.plan.cameras.length === 0)

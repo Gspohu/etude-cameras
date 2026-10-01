@@ -33,6 +33,13 @@
     <progress id="avancement" max="1" value="0" hidden></progress>
 
     <h2>Proposition</h2>
+    <p class="note">Sans zone, la recherche vise tout le terrain</p>
+    <div class="ligne"><label>Zone</label>
+        <button id="zone-rect">Rectangle</button>
+        <button id="zone-poly">Polygone</button>
+        <button id="zone-fermer" hidden>Fermer</button>
+        <button id="zone-effacer">Effacer</button></div>
+    <p class="note" id="aide-zone"></p>
     <div class="ligne"><label for="nb-cameras">Caméras</label>
         <input type="number" id="nb-cameras" min="1" max="12" step="1" placeholder="auto"></div>
     <div class="ligne"><label for="budget">Budget €</label>

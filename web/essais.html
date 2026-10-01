@@ -10,8 +10,9 @@
 <script type="module">
 import init, { analyser, catalogue_defaut, charger_catalogue, charger_plan, placer, plan_defaut,
                plan_vers_yaml } from "./pkg/champ.js";
-import { ajouterCamera, appliquerTouche, attraper, camera, deplacer, relacher, supprimerCamera,
-         tourner } from "./edition.js";
+import { ajouterCamera, appliquerTouche, attraper, camera, commencerZone, deplacer, effacerZone,
+         etirerZone, finirZone, pointZone, relacher, supprimerCamera, tourner, zoneAffichee }
+    from "./edition.js";
 
 const resultats = [];
 
@@ -105,6 +106,22 @@ async function lancer()
     const vide = JSON.parse(JSON.stringify(etat));
     vide.plan.cameras = [];
     verifier("retirer d'un plan vide ne casse rien", supprimerCamera(vide) === false);
+
+    // la zone visée : au glisser pour un rectangle, au clic pour un polygone
+    commencerZone(etat, "rectangle");
+    pointZone(etat, 5, 5);
+    etirerZone(etat, 12, 11);
+    verifier("le rectangle se voit pendant le glisser", zoneAffichee(etat).length === 4);
+    verifier("le rectangle se pose", finirZone(etat) && etat.plan.zone.length === 4,
+             JSON.stringify(etat.plan.zone));
+    commencerZone(etat, "rectangle");
+    pointZone(etat, 5, 5);
+    etirerZone(etat, 5.1, 5.2);
+    verifier("un glisser d'un rien est refusé", finirZone(etat) === false);
+    commencerZone(etat, "polygone");
+    [[3, 3], [9, 3], [9, 8]].forEach((p) => pointZone(etat, p[0], p[1]));
+    verifier("le polygone se pose", finirZone(etat) && etat.plan.zone.length === 3);
+    verifier("la zone s'efface", effacerZone(etat) && etat.plan.zone.length === 0);
 
     const yaml = plan_vers_yaml(JSON.stringify(etat.plan));
     verifier("export YAML relisible",

@@ -1,5 +1,7 @@
 // Top view drawing on a canvas : DORI zones, obstacles, cameras and checkpoints
 
+import { zoneAffichee } from "./edition.js";
+
 const ALPHA_ZONES = 0.55;
 
 
@@ -204,6 +206,28 @@ function obstacles(ctx, plan, v)
     });
 }
 
+// The ground the search is paid to cover, drawn while it is being traced too
+function zoneVisee(ctx, etat, v)
+{
+    const pts = zoneAffichee(etat);
+    if (pts.length < 2)
+    {
+        return;
+    }
+    trace(ctx, pts, v, pts.length > 2);
+    if (pts.length > 2)
+    {
+        ctx.fillStyle = jeton("--colour-warning") + "26";
+        ctx.fill();
+    }
+    ctx.setLineDash([9, 5]);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = jeton("--colour-warning");
+    ctx.stroke();
+    ctx.setLineDash([]);
+}
+
+
 function cameras(ctx, etat, catalogue, v)
 {
     etat.plan.cameras.forEach((pose, i) =>
@@ -297,7 +321,8 @@ export function dessiner(canvas, etat, catalogue, resume, niveaux, hors)
     ctx.stroke();
     ctx.setLineDash([]);
     obstacles(ctx, etat.plan, v);
-    cameras(ctx, etat, catalogue, v); 
+    zoneVisee(ctx, etat, v);
+    cameras(ctx, etat, catalogue, v);
     passages(ctx, etat.plan, resume.verdicts, v);
     if (resume.mention)
     {

@@ -82,6 +82,11 @@ main
     min-height: 1.1rem;
 }
 
+#aide-zone
+{
+    min-height: 1.1rem;
+}
+
 #avancement
 {
     width: 100%;
