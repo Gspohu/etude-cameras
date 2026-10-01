@@ -164,7 +164,13 @@ pub fn charger_plan(texte: &str, catalogue: &HashMap<String, ModeleCamera>, defa
         hauteur_cible: d.get("hauteur_cible").and_then(|v| v.as_f64()).unwrap_or(1.6),
         pas: d.get("pas").and_then(|v| v.as_f64()).unwrap_or(0.1),
         marge_hors: d.get("marge_hors").and_then(|v| v.as_f64()).unwrap_or(12.0),
+        zone: points(d.get("zone"), "zone")?,
     };
+    if (!plan.zone.is_empty() && plan.zone.len() < 3)
+    {
+        return Err(format!("zone : {} point(s), il en faut au moins 3 pour une surface",
+                           plan.zone.len()));
+    }
 
     if let Some(liste) = d.get("obstacles").and_then(|v| v.as_sequence())
     {
@@ -242,6 +248,10 @@ pub fn plan_vers_yaml(plan: &Plan) -> Result<String, String>
     sortie.insert("pas".into(), plan.pas.into());
     sortie.insert("marge_hors".into(), plan.marge_hors.into());
     sortie.insert("limite".into(), en_valeur(&plan.limite)?);
+    if !plan.zone.is_empty()
+    {
+        sortie.insert("zone".into(), en_valeur(&plan.zone)?);
+    }
     let mut obstacles = Vec::new();
     for ob in &plan.obstacles
     {

@@ -72,6 +72,10 @@ pub struct Plan
     // how far past the boundary the grid looks, to weigh what gets filmed there
     #[serde(default = "douze")]
     pub marge_hors: f64,
+    // the ground worth watching, when only a part of the plot is. Empty means
+    // the whole plot counts, which is what a plan without one asks for
+    #[serde(default)]
+    pub zone: Vec<[f64; 2]>,
 }
 
 fn douze() -> f64

@@ -124,7 +124,7 @@ fn sol_utile(plan: &Plan, x: f64, y: f64) -> bool
 }
 
 // Mounting points along every wall and fence, a step apart, pushed off the face
-// by a hand's width. Which face is read off the plan rather than guessed : a
+// by a hand's width. Which face holds it is read off the plan, never guessed : a
 // building is watched from outside, a boundary fence from inside, and a ring
 // saisi clockwise would send every anchor the wrong way
 pub fn ancrages(plan: &Plan, ecart: f64) -> Vec<Ancrage>
@@ -226,6 +226,23 @@ pub fn placer_suivi(plan: &Plan, catalogue: &HashMap<String, ModeleCamera>, r: &
     let mut candidats = Vec::new();
     let mut essayes = 0usize;
 
+    // What the search is paid for : the declared zone, or the whole plot when
+    // none is drawn. A camera covering ground outside it earns nothing here
+    let repere = calculer(plan, catalogue, Some(r.pas_grille), false, None)?;
+    let compte: Vec<bool> = if plan.zone.is_empty()
+    {
+        vec![true; repere.nx * repere.ny]
+    }
+    else
+    {
+        (0..repere.nx * repere.ny).map(|i|
+        {
+            let x = repere.x0 + (i % repere.nx) as f64 * repere.pas;
+            let y = repere.y0 + (i / repere.nx) as f64 * repere.pas;
+            return dans_polygone(x, y, &plan.zone);
+        }).collect()
+    };
+
     // how many poses the loops below will walk through, the cap on the height
     // of each support included
     let ancres = ancrages(plan, 1.0);
@@ -277,7 +294,8 @@ pub fn placer_suivi(plan: &Plan, catalogue: &HashMap<String, ModeleCamera>, r: &
                             continue;
                         }
                         let vu: Vec<bool> = (0..c.nx * c.ny)
-                            .map(|i| c.utile[i] == 1 && c.rho[i] >= seuil_observer).collect();
+                            .map(|i| c.utile[i] == 1 && c.rho[i] >= seuil_observer
+                                 && compte[i]).collect();
                         if vu.iter().any(|v| *v)
                         {
                             candidats.push(Candidat { pose, vu });

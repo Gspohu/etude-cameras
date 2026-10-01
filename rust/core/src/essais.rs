@@ -33,6 +33,7 @@ fn terrain(obstacles: Vec<Obstacle>, hauteur: f64, inclinaison: f64) -> Plan
         cameras: vec![Pose { nom: "cam".into(), modele: "dahua-2441-28".into(), x: 0.0, y: 0.0,
                              hauteur, azimut: 90.0, inclinaison }],
         points: Vec::new(), hauteur_cible: 1.6, pas: 0.25, marge_hors: 2.0,
+        zone: Vec::new(),
     };
 }
 
@@ -336,6 +337,35 @@ fn ce_qui_est_retenu_tient_sur_la_grille_du_plan() -> Essai
     {
         assert!(c.conforme, "{} déborde de {:.3} m2", c.camera, c.debordement_m2);
     }
+    return Ok(());
+}
+
+
+#[test]
+fn la_zone_decide_ou_le_solveur_regarde() -> Essai
+{
+    // deux moitiés de terrain, la caméra doit suivre celle qu'on désigne
+    let cat = catalogue()?;
+    let cabane = Obstacle { nom: "cabane".into(), genre: "batiment".into(),
+                            points: vec![[19.0, -1.0], [21.0, -1.0], [21.0, 1.0], [19.0, 1.0]],
+                            hauteur: 3.0, base: 0.0, ferme: true, opaque: true };
+    let reglages: crate::placement::Reglages = serde_json::from_str(
+        "{\"nb_cameras\": 1, \"modeles\": [\"dahua-2441-28\"], \"pas_grille\": 0.8, \
+          \"pas_azimut\": 45, \"hauteurs\": [2.5], \"inclinaisons\": [40]}")
+        .map_err(|e| e.to_string())?;
+
+    let mut vus = Vec::new();
+    for zone in [vec![[22.0, -9.0], [39.0, -9.0], [39.0, 9.0], [22.0, 9.0]],
+                 vec![[1.0, -9.0], [18.0, -9.0], [18.0, 9.0], [1.0, 9.0]]]
+    {
+        let mut plan = terrain(vec![cabane.clone()], 2.8, 0.0);
+        plan.cameras.clear();
+        plan.zone = zone;
+        let p = crate::placement::placer(&plan, &cat, &reglages)?;
+        assert_eq!(p.poses.len(), 1, "aucune pose proposée");
+        vus.push(p.poses[0].azimut);
+    }
+    assert_ne!(vus[0], vus[1], "la zone n'a rien changé, azimut {} deux fois", vus[0]);
     return Ok(());
 }
 
