@@ -371,6 +371,40 @@ fn la_zone_decide_ou_le_solveur_regarde() -> Essai
 
 
 #[test]
+fn l_arbitrage_echange_des_cameras_contre_de_la_surface() -> Essai
+{
+    let cat = catalogue()?;
+    let compter = |arbitrage: f64, garder_points: bool| -> Result<usize, String>
+    {
+        let mut plan = charger_plan(PLAN, &cat, "exemple")?;
+        plan.cameras.clear();
+        if !garder_points
+        {
+            plan.points.clear();
+        }
+        let texte = format!("{{\"arbitrage\": {}, \"modeles\": [\"dahua-2441-28\"], \
+                             \"pas_grille\": 0.8, \"pas_azimut\": 45, \"hauteurs\": [2.5], \
+                             \"inclinaisons\": [40]}}", arbitrage);
+        let reglages: crate::placement::Reglages = serde_json::from_str(&texte)
+            .map_err(|e| e.to_string())?;
+        return Ok(crate::placement::placer(&plan, &cat, &reglages)?.poses.len());
+    };
+    // sans point de passage rien ne force la premiere camera, et c'est le cas qui
+    // sortait vide : le visiteur lisait un terrain infaisable la ou des poses tenaient
+    for garder in [true, false]
+    {
+        let comptes: Vec<usize> = [0.0, 0.5, 1.0].iter()
+            .map(|a| compter(*a, garder)).collect::<Result<_, _>>()?;
+        assert!(comptes[0] >= 1, "arbitrage 0 ne propose rien, comptes {:?}", comptes);
+        assert!(comptes[0] < comptes[2], "le curseur ne change rien, comptes {:?}", comptes);
+        assert!(comptes[0] <= comptes[1] && comptes[1] <= comptes[2],
+                "le compte ne suit pas le curseur, comptes {:?}", comptes);
+    }
+    return Ok(());
+}
+
+
+#[test]
 fn une_fiche_sans_portee_ir_ne_concourt_pas_seule() -> Essai
 {
     let cat = catalogue()?;

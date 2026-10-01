@@ -160,12 +160,17 @@ def cmd_placer(args):
     p = placer(plan, catalogue, nb_cameras=args.cameras, modeles=args.modeles,
                pas_grille=args.pas_grille, pas_azimut=args.pas_azimut,
                hauteurs=args.hauteurs, inclinaisons=args.inclinaisons,
-               budget_eur=args.budget, gain_minimal_m2=args.gain_minimal)
+               budget_eur=args.budget, gain_minimal_m2=args.gain_minimal,
+               arbitrage=args.arbitrage)
     print(f"{p['essais']} poses essayées, {p['candidats']} candidats conformes au droit "
           f"(une pose avec un modèle)")
     if not p["poses"]:
-        print("Aucune pose conforme : baissez les caméras, inclinez-les davantage, "
-              "ou rapprochez-les de la clôture")
+        if p["candidats"]:
+            print(f"{p['candidats']} poses conformes au droit, aucune n'apporte les "
+                  f"{args.gain_minimal:g} m² demandés : baissez --gain-minimal")
+        else:
+            print("Aucune pose conforme : baissez les caméras, inclinez-les davantage, "
+                  "ou rapprochez-les de la clôture")
         return 1
     for pose, etape in zip(p["poses"], p["etapes"]):
         part = 100 * etape["cumul_m2"] / p["surface_m2"] if p["surface_m2"] else 0.0
@@ -255,8 +260,11 @@ def construire_parseur():
     sp.add_argument("--modeles", nargs="+", default=None,
                     help="modèles en concurrence, sinon tout le catalogue")
     sp.add_argument("--budget", type=float, default=None, help="plafond de dépense en euros")
-    sp.add_argument("--gain-minimal", type=float, default=5.0,
-                    help="surface qu'une caméra de plus doit apporter, en mètres carrés")
+    seuil = sp.add_mutually_exclusive_group()
+    seuil.add_argument("--gain-minimal", type=float, default=5.0,
+                       help="surface qu'une caméra de plus doit apporter, en mètres carrés")
+    seuil.add_argument("--arbitrage", type=float, default=None,
+                       help="0 achète le moins de caméras possible, 1 couvre le plus possible")
     sp.add_argument("--pas-grille", type=float, default=0.3, help="pas de la grille de recherche")
     sp.add_argument("--pas-azimut", type=float, default=10.0, help="pas angulaire balayé")
     sp.add_argument("--hauteurs", type=float, nargs="+", default=None,

@@ -22,6 +22,10 @@ pub struct Reglages
     pub modeles: Vec<String>,
     #[serde(default = "cinq")]
     pub gain_minimal_m2: f64,
+    // 0 buys as few cameras as it can, 1 covers as much as it can, and the
+    // middle trades one against the other. Absent, gain_minimal_m2 decides
+    #[serde(default)]
+    pub arbitrage: Option<f64>,
     #[serde(default = "six")]
     pub maximum_cameras: usize,
     #[serde(default = "hauteurs_par_defaut")]
@@ -314,6 +318,11 @@ pub fn placer_suivi(plan: &Plan, catalogue: &HashMap<String, ModeleCamera>, r: &
     let mut etapes: Vec<Etape> = Vec::new();
     let mut depense = 0.0f64;
     let plafond = r.nb_cameras.unwrap_or(r.maximum_cameras);
+    // The best a single camera has bought, what the ones after it are measured
+    // against. A share of the zone was measured instead and left the whole useful
+    // range of the slider above 0.8 : gains collapse after two cameras, and a
+    // fraction of a plot says nothing about them
+    let mut reference = 0.0f64;
 
     let prix = |p: &Pose| catalogue[&p.modele].prix_eur.unwrap_or(0.0);
     let tient_le_budget = |depense: f64, p: &Pose| match r.budget_eur
@@ -340,6 +349,12 @@ pub fn placer_suivi(plan: &Plan, catalogue: &HashMap<String, ModeleCamera>, r: &
         if (retenues.len() >= plafond)
         {
             break;
+        }
+        // Drawing a zone says what matters. A checkpoint left outside it no
+        // longer spends a camera, that camera goes back to the zone
+        if (!plan.zone.is_empty() && !dans_polygone(pt.x, pt.y, &plan.zone))
+        {
+            continue;
         }
         let ht = pt.hauteur.unwrap_or(plan.hauteur_cible);
         loop
@@ -390,6 +405,7 @@ pub fn placer_suivi(plan: &Plan, catalogue: &HashMap<String, ModeleCamera>, r: &
                                 cumul_m2: acquis.iter().filter(|a| **a).count() as f64 * cellule,
                                 cout_eur: depense });
             retenues.push(candidats[i].pose.clone());
+            reference = reference.max(gain as f64 * cellule);
             break;
         }
     }
@@ -414,9 +430,22 @@ pub fn placer_suivi(plan: &Plan, catalogue: &HashMap<String, ModeleCamera>, r: &
             None => break,
             Some((gain, i)) =>
             {
+                let apporte = gain as f64 * cellule;
+                let plancher = match r.arbitrage
+                {
+                    None => r.gain_minimal_m2,
+                    // nothing to measure the first one against, and an empty
+                    // proposal reads as a plot no camera can watch
+                    Some(_) if retenues.is_empty() => 0.0,
+                    Some(a) =>
+                    {
+                        let reste = 1.0 - a.clamp(0.0, 1.0);
+                        reste * reste * reference
+                    },
+                };
                 // a camera that buys less than the threshold is one nobody should buy
                 // unless its number was imposed
-                if (r.nb_cameras.is_none() && gain as f64 * cellule < r.gain_minimal_m2)
+                if (r.nb_cameras.is_none() && apporte < plancher)
                 {
                     break;
                 }
@@ -432,10 +461,11 @@ pub fn placer_suivi(plan: &Plan, catalogue: &HashMap<String, ModeleCamera>, r: &
                 depense += prix(&candidats[i].pose);
                 etapes.push(Etape { camera: format!("cam{}", retenues.len() + 1),
                                     modele: candidats[i].pose.modele.clone(),
-                                    gain_m2: gain as f64 * cellule,
+                                    gain_m2: apporte,
                                     cumul_m2: acquis.iter().filter(|a| **a).count() as f64 * cellule,
                                     cout_eur: depense });
                 retenues.push(candidats[i].pose.clone());
+                reference = reference.max(apporte);
             },
         }
     }

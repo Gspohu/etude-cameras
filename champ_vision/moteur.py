@@ -314,11 +314,13 @@ def analyser(plan, catalogue, pas=None, nuit=False, hauteur_cible=None):
 
 def placer(plan, catalogue, nb_cameras=None, modeles=None, pas_grille=0.3,
            pas_azimut=10.0, hauteurs=None, inclinaisons=None, budget_eur=None,
-           gain_minimal_m2=5.0):
+           gain_minimal_m2=5.0, arbitrage=None):
     """Poses that watch the plot without filming past its boundary"""
     requete = json.loads(_requete(plan, catalogue))
     requete.update({"pas_grille": pas_grille, "pas_azimut": pas_azimut,
                     "gain_minimal_m2": gain_minimal_m2})
+    if arbitrage is not None:
+        requete["arbitrage"] = arbitrage
     if nb_cameras:
         requete["nb_cameras"] = nb_cameras
     if budget_eur:
