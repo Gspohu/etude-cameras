@@ -392,7 +392,7 @@ fn plan_exemple_se_charge() -> Essai
     let couv = calculer(&plan, &cat, None, false, None)?;
     let st = statistiques(&couv);
     // la parcelle fait 349 m2, moins le projet, la maison existante et le cabanon
-    assert!((st.surface_m2 - 198.6).abs() < 2.0, "surface {}", st.surface_m2);
+    assert!((st.surface_m2 - 203.8).abs() < 2.0, "surface {}", st.surface_m2);
     return Ok(());
 }
 

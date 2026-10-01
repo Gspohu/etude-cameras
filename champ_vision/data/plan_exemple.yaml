@@ -43,13 +43,13 @@ obstacles:
     hauteur: 6.0
     points: [[17.43, 20.83], [23.65, 20.83], [23.65, 7.07], [17.43, 7.07]]
 
-  # Cabanon de 5 x 4 m calé dans l'angle aigu, le long de la limite nord, reculé
-  # jusqu'à ce que son coin arrière touche la limite sud-ouest. Le cadastre le
-  # dessine décalé, les cotes viennent du terrain
+  # Cabanon au fond de l'angle aigu, ses deux murs arrière contre les limites,
+  # 5 m le long de celle du nord et 4 m le long de celle du sud-ouest. Le
+  # cadastre le dessine décalé, les cotes viennent du terrain
   - nom: le cabanon
     type: batiment
     hauteur: 2.0
-    points: [[3.53, 19.93], [8.52, 20.20], [8.74, 16.20], [3.74, 15.94]]
+    points: [[0.00, 19.74], [4.99, 20.01], [7.80, 17.16], [2.81, 16.89]]
 
 cameras:
   # Poses sorties de " placer --budget 200 --modeles dahua-2441-28 ", soit la

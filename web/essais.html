@@ -41,7 +41,7 @@ async function lancer()
     const st = resume.statistiques;
 
     // the very numbers the Python command line prints on the same plan
-    verifier("surface surveillée", proche(st.surface_m2, 198.64), st.surface_m2.toFixed(1));
+    verifier("surface surveillée", proche(st.surface_m2, 203.81), st.surface_m2.toFixed(1));
     verifier("surfaces DORI",
              [74.7, 74.7, 73.5, 27.68].every((v, i) => proche(st.au_moins_m2[i], v)),
              st.au_moins_m2.map((v) => v.toFixed(1)).join(" "));
