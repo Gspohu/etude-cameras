@@ -135,9 +135,9 @@ def test_plan_exemple_se_charge(catalogue):
     plan = charger_plan(PLAN_EXEMPLE, catalogue)
     assert plan.cotes_arbitraires
     assert len(plan.cameras) == 2 and len(plan.points) == 2
-    # la parcelle AN 164 fait 349 m2, moins les deux constructions
+    # la parcelle AN 164 fait 349 m2, moins les trois constructions
     a = analyser(plan, catalogue)
-    assert a.statistiques.surface_m2 == pytest.approx(218.7, abs=1.0)
+    assert a.statistiques.surface_m2 == pytest.approx(198.6, abs=1.0)
     # les poses de l'exemple sortent de placer , elles ne filment pas dehors
     assert all(c.conforme for c in a.conformite)
 
