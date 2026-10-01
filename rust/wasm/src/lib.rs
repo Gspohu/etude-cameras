@@ -63,10 +63,20 @@ pub fn charger_catalogue(texte: &str) -> Result<String, JsError>
         .map_err(|e| JsError::new(&e.to_string()));
 }
 
+// avancement is called with the fraction done, from 0 to 1, about a hundred
+// times over a search. Left out, the search runs silently as before
 #[wasm_bindgen]
-pub fn placer(requete_json: &str) -> Result<String, JsError>
+pub fn placer(requete_json: &str, avancement: Option<js_sys::Function>)
+    -> Result<String, JsError>
 {
-    return pont::placer_json(requete_json).map_err(|e| JsError::new(&e));
+    let mut dire = |ou: f64|
+    {
+        if let Some(f) = &avancement
+        {
+            let _ = f.call1(&JsValue::NULL, &JsValue::from_f64(ou));
+        }
+    };
+    return pont::placer_json_suivi(requete_json, &mut dire).map_err(|e| JsError::new(&e));
 }
 
 #[wasm_bindgen]

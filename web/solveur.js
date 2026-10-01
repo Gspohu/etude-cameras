@@ -13,7 +13,13 @@ self.onmessage = async (ev) =>
     try
     {
         await demarre;
-        self.postMessage({ ok: true, resultat: JSON.parse(placer(JSON.stringify(ev.data))) });
+        // the page draws a bar from these, a silent minute looks like a crash
+        const avancer = (ou) =>
+        {
+            self.postMessage({ avancement: ou });
+        };
+        self.postMessage({ ok: true,
+                           resultat: JSON.parse(placer(JSON.stringify(ev.data), avancer)) });
     }
     catch (e)
     {

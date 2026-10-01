@@ -136,9 +136,17 @@ pub struct RequetePlacement
 
 pub fn placer_json(requete_json: &str) -> Result<String, String>
 {
+    return placer_json_suivi(requete_json, &mut |_| {});
+}
+
+// Same search, reporting how far along it is : a minute of silence reads as a
+// crash, and only the caller knows how to show it
+pub fn placer_json_suivi(requete_json: &str, avancement: &mut dyn FnMut(f64))
+    -> Result<String, String>
+{
     let r: RequetePlacement = serde_json::from_str(requete_json)
         .map_err(|e| format!("requête illisible : {}", e))?;
-    let p = crate::placement::placer(&r.plan, &r.catalogue, &r.reglages)?;
+    let p = crate::placement::placer_suivi(&r.plan, &r.catalogue, &r.reglages, avancement)?;
     return serde_json::to_string(&p).map_err(|e| e.to_string());
 }
 

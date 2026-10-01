@@ -182,6 +182,15 @@ struct Candidat
 pub fn placer(plan: &Plan, catalogue: &HashMap<String, ModeleCamera>, r: &Reglages)
     -> Result<Proposition, String>
 {
+    return placer_suivi(plan, catalogue, r, &mut |_| {});
+}
+
+// The search runs for a minute and says nothing meanwhile, which reads as a
+// hang. `avancement` is handed the fraction done, the caller decides what to
+// show. The core knows nothing of the screen it ends up on
+pub fn placer_suivi(plan: &Plan, catalogue: &HashMap<String, ModeleCamera>, r: &Reglages,
+                    avancement: &mut dyn FnMut(f64)) -> Result<Proposition, String>
+{
     // An unknown IR range is an unknown night, and a datasheet nobody checked is
     // a figure nobody stands behind. Neither is handed out on its own, naming it
     // in modeles still brings it back
@@ -217,7 +226,16 @@ pub fn placer(plan: &Plan, catalogue: &HashMap<String, ModeleCamera>, r: &Reglag
     let mut candidats = Vec::new();
     let mut essayes = 0usize;
 
-    for ancrage in ancrages(plan, 1.0)
+    // how many poses the loops below will walk through, the cap on the height
+    // of each support included
+    let ancres = ancrages(plan, 1.0);
+    let par_tour = ((360.0 / r.pas_azimut).ceil() as usize).max(1) * r.inclinaisons.len();
+    let total: usize = ancres.iter()
+        .map(|a| r.hauteurs.iter().filter(|h| **h <= a.plafond).count() * par_tour)
+        .sum();
+    let palier = (total / 100).max(1);
+
+    for ancrage in ancres
     {
         for hauteur in &r.hauteurs
         {
@@ -231,6 +249,10 @@ pub fn placer(plan: &Plan, catalogue: &HashMap<String, ModeleCamera>, r: &Reglag
                 while (az < 360.0)
                 {
                     essayes += 1;
+                    if (essayes % palier == 0)
+                    {
+                        avancement((essayes as f64 / total.max(1) as f64).min(1.0));
+                    }
                     let reference = Pose { nom: "essai".to_string(),
                                            modele: enveloppe.to_string(),
                                            x: ancrage.x, y: ancrage.y, hauteur: *hauteur,

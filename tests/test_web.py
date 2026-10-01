@@ -59,8 +59,13 @@ def test_le_worker_du_solveur_repond(serveur):
         const catalogue = m.charger_catalogue(m.catalogue_defaut());
         const plan = JSON.parse(m.charger_plan(m.plan_defaut(), catalogue, 'Exemple'));
         const ouvrier = new Worker(base + '/solveur.js', { type: 'module' });
+        let vus = 0;
         return await new Promise((ok, ko) => {
-            ouvrier.onmessage = (ev) => ok(ev.data);
+            ouvrier.onmessage = (ev) => {
+                // la recherche annonce son avancement avant de rendre la main
+                if (ev.data.avancement !== undefined) { vus += 1; return; }
+                ok(Object.assign({ avancements: vus }, ev.data));
+            };
             ouvrier.onerror = (e) => ko(new Error(e.message || 'worker injoignable'));
             ouvrier.postMessage({ plan, catalogue: JSON.parse(catalogue),
                                   modeles: ['dahua-2441-28'], nb_cameras: 1, pas_grille: 0.8,
@@ -75,6 +80,7 @@ def test_le_worker_du_solveur_repond(serveur):
         navigateur.close()
     assert reponse["ok"], reponse.get("erreur")
     assert len(reponse["resultat"]["poses"]) == 1
+    assert reponse["avancements"] > 0, "la recherche n'a jamais dit où elle en était"
 
 
 def test_essais_navigateur(serveur):

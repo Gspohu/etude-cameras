@@ -228,6 +228,15 @@ function etatProposition(texte)
 {
     document.getElementById("proposition").textContent = texte;
     document.getElementById("proposer").textContent = solveur === null ? "Proposer" : "Arrêter";
+    document.getElementById("avancement").hidden = solveur === null;
+}
+
+
+function montrerAvancement(ou, modele)
+{
+    document.getElementById("avancement").value = ou;
+    document.getElementById("proposition").textContent =
+        `Recherche avec ${modele}, ${Math.round(100 * ou)} %`;
 }
 
 
@@ -271,6 +280,11 @@ function proposer()
     etatProposition(`Recherche avec ${catalogue[cle].nom}`);
     solveur.onmessage = (ev) =>
     {
+        if (ev.data.avancement !== undefined)
+        {
+            montrerAvancement(ev.data.avancement, catalogue[cle].nom);
+            return;
+        }
         arreterSolveur();
         if (ev.data.ok)
         {
