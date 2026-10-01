@@ -82,6 +82,19 @@ main
     min-height: 1.1rem;
 }
 
+/* the nudges flank their field, the field keeps whatever room is left */
+button.pas
+{
+    min-width: 2.2rem;
+    font-weight: 600;
+}
+
+.ligne input[type="number"]
+{
+    min-width: 0;
+    flex: 1 1 4rem;
+}
+
 /* A phone cannot give a fifth of its width to the map and still show it */
 @media (max-width: 900px)
 {
@@ -91,6 +104,13 @@ main
         grid-template-rows: 60vh 1fr;
         height: auto;
         min-height: 100vh;
+    }
+
+    /* a finger is not a mouse pointer, 30 px of button is missed half the time */
+    button, select, input[type="number"], label.fichier
+    {
+        min-height: 2.75rem;
+        font-size: 1rem;
     }
 
     #panneau

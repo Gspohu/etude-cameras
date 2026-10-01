@@ -2,8 +2,8 @@
 
 import init, { analyser, catalogue_defaut, charger_catalogue, charger_plan, niveaux_dori,
                plan_defaut, plan_vers_yaml } from "./pkg/champ.js";
-import { appliquerTouche, attraper, camera, changerModele, deplacer, relacher, tourner }
-    from "./edition.js";
+import { ajouterCamera, appliquerTouche, attraper, camera, changerModele, deplacer, relacher,
+         supprimerCamera, tourner } from "./edition.js";
 import { couleursDori, dessiner, vue } from "./rendu.js";
 import * as panneau from "./panneau.js";
 
@@ -201,6 +201,25 @@ function exporterImage()
     });
 }
 
+function listerCameras()
+{
+    panneau.options("choix-camera", etat.plan.cameras.map((c) =>
+    {
+        return c.nom;
+    }), (nom) =>
+    {
+        return nom;
+    });
+}
+
+
+function nombreDuChamp(id)
+{
+    const valeur = parseFloat(document.getElementById(id).value);
+    return Number.isFinite(valeur) ? valeur : null;
+}
+
+
 // A whole search runs for tens of seconds, off the page thread the map stays usable
 let solveur = null;
 
@@ -231,13 +250,7 @@ function appliquerProposition(p)
     }
     etat.plan.cameras = p.poses;
     etat.selection = 0;
-    panneau.options("choix-camera", p.poses.map((c) =>
-    {
-        return c.nom;
-    }), (nom) =>
-    {
-        return nom;
-    });
+    listerCameras();
     const part = p.surface_m2 ? Math.round(100 * p.couverture_m2 / p.surface_m2) : 0;
     etatProposition(`${p.poses.length} caméras, ${p.cout_eur.toFixed(0)} €, ${part} % couverts, `
                     + `points tenus ${p.points_tenus}`);
@@ -269,8 +282,19 @@ function proposer()
     };
     // the selected model on a coarse grid, the whole catalogue at the fine step
     // would run for minutes even off the page thread
-    solveur.postMessage({ plan: etat.plan, catalogue: JSON.parse(catalogueJson),
-                          modeles: [cle], pas_grille: 0.5, pas_azimut: 20 });
+    const demande = { plan: etat.plan, catalogue: JSON.parse(catalogueJson),
+                      modeles: [cle], pas_grille: 0.5, pas_azimut: 20 };
+    const voulues = nombreDuChamp("nb-cameras");
+    const plafond = nombreDuChamp("budget");
+    if (voulues !== null)
+    {
+        demande.nb_cameras = Math.round(voulues);
+    }
+    if (plafond !== null)
+    {
+        demande.budget_eur = plafond;
+    }
+    solveur.postMessage(demande);
 }
 
 
@@ -291,13 +315,7 @@ function poserPlan(texte, nom)
     etat.plan = JSON.parse(charger_plan(texte, catalogueJson, nom));
     etat.selection = 0;
     etat.hauteurCible = null;
-    panneau.options("choix-camera", etat.plan.cameras.map((c) =>
-    {
-        return c.nom;
-    }), (nom) =>
-    {
-        return nom;
-    });
+    listerCameras();
 }
 
 
@@ -421,6 +439,35 @@ function brancher()
     document.getElementById("bascule-nuit").addEventListener("click", () =>
     {
         etat.nuit = !etat.nuit;
+        recalculer();
+    });
+    document.getElementById("ajouter-camera").addEventListener("click", () =>
+    {
+        ajouterCamera(etat);
+        listerCameras();
+        recalculer();
+    });
+    document.getElementById("supprimer-camera").addEventListener("click", () =>
+    {
+        if (supprimerCamera(etat))
+        {
+            listerCameras();
+            recalculer();
+        }
+    });
+    // one listener for the four nudges, each button carries its field and its step
+    document.getElementById("panneau").addEventListener("click", (ev) =>
+    {
+        const bouton = ev.target.closest("button.pas");
+        const c = camera(etat);
+        if (bouton === null || c === null)
+        {
+            return;
+        }
+        const champ = bouton.dataset.champ;
+        const delta = parseFloat(bouton.dataset.delta);
+        c[champ] = champ === "azimut" ? (c.azimut + delta + 360) % 360
+            : Math.max(-30, Math.min(90, c.inclinaison + delta));
         recalculer();
     });
     document.getElementById("proposer").addEventListener("click", proposer);

@@ -31,15 +31,29 @@
     <p class="alerte" id="erreur"></p>
     <p class="note" id="proposition"></p>
 
+    <h2>Proposition</h2>
+    <div class="ligne"><label for="nb-cameras">Caméras</label>
+        <input type="number" id="nb-cameras" min="1" max="12" step="1" placeholder="auto"></div>
+    <div class="ligne"><label for="budget">Budget €</label>
+        <input type="number" id="budget" min="0" step="10" placeholder="libre"></div>
+
     <h2>Caméra</h2>
     <div class="ligne">
         <select id="choix-camera" aria-label="Caméra"></select>
+        <button id="ajouter-camera" aria-label="Ajouter une caméra">+</button>
+        <button id="supprimer-camera" aria-label="Retirer cette caméra">-</button>
+    </div>
+    <div class="ligne">
         <select id="choix-modele" aria-label="Modèle"></select>
     </div>
     <div class="ligne"><label for="azimut">Azimut</label>
-        <input type="number" id="azimut" step="1"></div>
+        <button class="pas" data-champ="azimut" data-delta="-5" aria-label="Azimut moins">-</button>
+        <input type="number" id="azimut" step="1">
+        <button class="pas" data-champ="azimut" data-delta="5" aria-label="Azimut plus">+</button></div>
     <div class="ligne"><label for="inclinaison">Inclinaison</label>
-        <input type="number" id="inclinaison" step="1"></div>
+        <button class="pas" data-champ="inclinaison" data-delta="-5" aria-label="Inclinaison moins">-</button>
+        <input type="number" id="inclinaison" step="1">
+        <button class="pas" data-champ="inclinaison" data-delta="5" aria-label="Inclinaison plus">+</button></div>
     <div class="ligne"><label for="hauteur">Hauteur</label>
         <input type="number" id="hauteur" step="0.1"></div>
     <div class="ligne"><label for="cible">Cible</label>

@@ -39,6 +39,51 @@ export function relacher(etat)
 }
 
 
+// A fresh camera lands at the middle of the plot, where it is visible and sure
+// to be inside, the visitor drags it where it belongs
+export function ajouterCamera(etat)
+{
+    const pts = etat.plan.limite;
+    const centre = pts.reduce((a, p) =>
+    {
+        return [a[0] + p[0] / pts.length, a[1] + p[1] / pts.length];
+    }, [0, 0]);
+    const pris = new Set(etat.plan.cameras.map((c) =>
+    {
+        return c.nom;
+    }));
+    let n = etat.plan.cameras.length + 1;
+    while (pris.has(`cam${n}`))
+    {
+        n += 1;
+    }
+    const courante = camera(etat);
+    etat.plan.cameras.push({
+        nom: `cam${n}`,
+        modele: courante === null ? etat.clesModeles[0] : courante.modele,
+        x: Math.round(centre[0] * 100) / 100,
+        y: Math.round(centre[1] * 100) / 100,
+        hauteur: 2.2,
+        azimut: 0,
+        inclinaison: 30,
+    });
+    etat.selection = etat.plan.cameras.length - 1;
+    return etat.plan.cameras[etat.selection];
+}
+
+
+export function supprimerCamera(etat)
+{
+    if (etat.plan.cameras.length === 0)
+    {
+        return false;
+    }
+    etat.plan.cameras.splice(etat.selection % etat.plan.cameras.length, 1);
+    etat.selection = 0;
+    return true;
+}
+
+
 export function deplacer(etat, x, y)
 {
     const c = camera(etat);

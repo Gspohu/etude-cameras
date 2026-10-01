@@ -10,7 +10,8 @@
 <script type="module">
 import init, { analyser, catalogue_defaut, charger_catalogue, charger_plan, placer, plan_defaut,
                plan_vers_yaml } from "./pkg/champ.js";
-import { appliquerTouche, attraper, camera, deplacer, relacher, tourner } from "./edition.js";
+import { ajouterCamera, appliquerTouche, attraper, camera, deplacer, relacher, supprimerCamera,
+         tourner } from "./edition.js";
 
 const resultats = [];
 
@@ -89,6 +90,21 @@ async function lancer()
     verifier("jour et nuit", appliquerTouche(etat, "n") === "recalculer" && etat.nuit);
     verifier("touche d'export", appliquerTouche(etat, "e") === "exporter");
     verifier("touche inconnue ignorée", appliquerTouche(etat, "z") === null);
+
+    // ajout et retrait, le nombre de caméras n'est plus figé par le plan chargé
+    const combien = etat.plan.cameras.length;
+    const neuve = ajouterCamera(etat);
+    verifier("une caméra de plus", etat.plan.cameras.length === combien + 1
+             && camera(etat).nom === neuve.nom, neuve.nom);
+    verifier("elle tombe dans la parcelle",
+             neuve.x > 0 && neuve.x < 28 && neuve.y > 0 && neuve.y < 22,
+             `${neuve.x} ${neuve.y}`);
+    verifier("son nom est libre",
+             new Set(etat.plan.cameras.map((c) => c.nom)).size === etat.plan.cameras.length);
+    verifier("retrait", supprimerCamera(etat) && etat.plan.cameras.length === combien);
+    const vide = JSON.parse(JSON.stringify(etat));
+    vide.plan.cameras = [];
+    verifier("retirer d'un plan vide ne casse rien", supprimerCamera(vide) === false);
 
     const yaml = plan_vers_yaml(JSON.stringify(etat.plan));
     verifier("export YAML relisible",
