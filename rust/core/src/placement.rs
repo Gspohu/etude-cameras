@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::analyse::conformite;
 use crate::modele::{niveau, ModeleCamera, NIVEAUX_DORI};
-use crate::scene::{Obstacle, Plan, Pose};
+use crate::scene::{Obstacle, Plan, PointPassage, Pose};
 use crate::visibilite::{calculer, dans_polygone, diagnostiquer};
 
 #[derive(Deserialize)]
@@ -228,21 +228,179 @@ impl Selection
 }
 
 
-// What one more camera has to buy to be worth its price, as a share of the best a single
-// one bought. Nothing measures the first against, and an empty proposal reads as a plot
-// no camera can watch
-fn plancher(r: &Reglages, sel: &Selection) -> f64
+// The whole search in one place : what it may choose from, what it has already bought
+// and the plan it answers to. Both loops below read the same eight pieces of state, and
+// handing them around one by one is what kept them tangled together
+struct Recherche<'a>
 {
-    return match r.arbitrage
+    plan: &'a Plan,
+    catalogue: &'a HashMap<String, ModeleCamera>,
+    r: &'a Reglages,
+    candidats: Vec<Candidat>,
+    // a candidate the finer grid caught overspilling, never offered again
+    ecarte: Vec<bool>,
+    cellule: f64,
+    plafond: usize,
+    sel: Selection,
+}
+
+
+impl<'a> Recherche<'a>
+{
+    fn neuve(plan: &'a Plan, catalogue: &'a HashMap<String, ModeleCamera>, r: &'a Reglages,
+             candidats: Vec<Candidat>, cases: usize) -> Self
     {
-        None => r.gain_minimal_m2,
-        Some(_) if sel.retenues.is_empty() => 0.0,
-        Some(a) =>
+        let ecarte = vec![false; candidats.len()];
+        return Recherche { plan, catalogue, r, candidats, ecarte,
+                           cellule: r.pas_grille * r.pas_grille,
+                           plafond: r.nb_cameras.unwrap_or(r.maximum_cameras),
+                           sel: Selection::neuve(cases) };
+    }
+
+    fn prix(&self, p: &Pose) -> f64
+    {
+        return self.catalogue[&p.modele].prix_eur.unwrap_or(0.0);
+    }
+
+    fn tient_le_budget(&self, p: &Pose) -> bool
+    {
+        return match self.r.budget_eur
         {
-            let reste = 1.0 - a.clamp(0.0, 1.0);
-            reste * reste * sel.reference
-        },
-    };
+            None => true,
+            Some(b) => self.sel.depense + self.prix(p) <= b + 1e-6,
+        };
+    }
+
+    // The search grid steps right over a narrow strip of overspill : at 0.5 m a camera
+    // measured 0 m2 outside where the plan's own grid reads one square metre. What is
+    // about to be kept is judged again on that finer grid
+    fn tenable(&self, pose: &Pose) -> Result<bool, String>
+    {
+        let mut seul = self.plan.clone();
+        seul.cameras = vec![pose.clone()];
+        let fin = calculer(&seul, self.catalogue, None, false, None)?;
+        return Ok(conformite(&seul, &fin)[0].conforme);
+    }
+
+    // What one more camera has to buy to be worth its price, as a share of the best a
+    // single one bought. Nothing measures the first against, and an empty proposal reads
+    // as a plot no camera can watch
+    fn plancher(&self) -> f64
+    {
+        return match self.r.arbitrage
+        {
+            None => self.r.gain_minimal_m2,
+            Some(_) if self.sel.retenues.is_empty() => 0.0,
+            Some(a) =>
+            {
+                let reste = 1.0 - a.clamp(0.0, 1.0);
+                reste * reste * self.sel.reference
+            },
+        };
+    }
+
+    fn retenir(&mut self, i: usize)
+    {
+        let prix = self.prix(&self.candidats[i].pose);
+        self.sel.retenir(&self.candidats[i], self.cellule, prix);
+    }
+
+    // a checkpoint that asks for identification decides one camera on its own, there is
+    // no room left to choose once the range is a few metres
+    fn couvrir_points(&mut self) -> Result<(), String>
+    {
+        let plan = self.plan;
+        for pt in &plan.points
+        {
+            if (self.sel.retenues.len() >= self.plafond)
+            {
+                break;
+            }
+            // Drawing a zone says what matters. A checkpoint left outside it no longer
+            // spends a camera, that camera goes back to the zone
+            if (!plan.zone.is_empty() && !dans_polygone(pt.x, pt.y, &plan.zone))
+            {
+                continue;
+            }
+            let ht = pt.hauteur.unwrap_or(plan.hauteur_cible);
+            while let Some(i) = self.meilleur_pour(pt, ht)
+            {
+                if !self.tenable(&self.candidats[i].pose)?
+                {
+                    self.ecarte[i] = true;
+                    continue;
+                }
+                self.retenir(i);
+                break;
+            }
+        }
+        return Ok(());
+    }
+
+    // the candidate holding this checkpoint at its required level and buying the most ground
+    fn meilleur_pour(&self, pt: &PointPassage, ht: f64) -> Option<usize>
+    {
+        let mut meilleur: Option<(usize, usize)> = None;
+        for (i, c) in self.candidats.iter().enumerate()
+        {
+            if (self.ecarte[i] || !self.tient_le_budget(&c.pose))
+            {
+                continue;
+            }
+            let mut seul = self.plan.clone();
+            seul.cameras = vec![c.pose.clone()];
+            let modele = &self.catalogue[&c.pose.modele];
+            let (raison, _, rho) = diagnostiquer(&seul, modele, &c.pose, pt.x, pt.y, ht, false);
+            if (raison.is_some() || niveau(rho) < pt.requis)
+            {
+                continue;
+            }
+            let gain = self.sel.gain(&c.vu);
+            if (meilleur.is_none() || gain > meilleur.unwrap().0)
+            {
+                meilleur = Some((gain, i));
+            }
+        }
+        return meilleur.map(|m| m.1);
+    }
+
+    fn completer_surface(&mut self) -> Result<(), String>
+    {
+        while (self.sel.retenues.len() < self.plafond)
+        {
+            let mut meilleur: Option<(usize, usize)> = None;
+            for (i, c) in self.candidats.iter().enumerate()
+            {
+                if (self.ecarte[i] || !self.tient_le_budget(&c.pose))
+                {
+                    continue;
+                }
+                let gain = self.sel.gain(&c.vu);
+                if (gain > 0 && (meilleur.is_none() || gain > meilleur.unwrap().0))
+                {
+                    meilleur = Some((gain, i));
+                }
+            }
+            let (gain, i) = match meilleur
+            {
+                None => break,
+                Some(x) => x,
+            };
+            // a camera that buys less than the threshold is one nobody should buy unless
+            // its number was imposed
+            if (self.r.nb_cameras.is_none() && (gain as f64) * self.cellule < self.plancher())
+            {
+                break;
+            }
+            if !self.tenable(&self.candidats[i].pose)?
+            {
+                self.ecarte[i] = true;
+                continue;
+            }
+            self.retenir(i);
+        }
+        return Ok(());
+    }
 }
 
 
@@ -407,122 +565,12 @@ pub fn placer_suivi(plan: &Plan, catalogue: &HashMap<String, ModeleCamera>, r: &
     let gabarit = calculer(plan, catalogue, Some(r.pas_grille), false, None)?;
     let cellule = r.pas_grille * r.pas_grille;
     let surface = gabarit.utile.iter().filter(|u| **u == 1).count() as f64 * cellule;
-    // A share of the zone used to set the floor, which left the whole useful range of
-    // the slider above 0.8 : gains collapse after two cameras, and a fraction of a plot
-    // says nothing about them
-    let mut sel = Selection::neuve(gabarit.nx * gabarit.ny);
-    let plafond = r.nb_cameras.unwrap_or(r.maximum_cameras);
+    let total_candidats = candidats.len();
 
-    let prix = |p: &Pose| catalogue[&p.modele].prix_eur.unwrap_or(0.0);
-    let tient_le_budget = |depense: f64, p: &Pose| match r.budget_eur
-    {
-        None => true,
-        Some(b) => depense + prix(p) <= b + 1e-6,
-    };
-    // The search grid steps right over a narrow strip of overspill : at 0.5 m a
-    // camera measured 0 m2 outside where the plan's own grid reads one square
-    // metre. What is about to be kept is judged again on that finer grid
-    let tenable = |pose: &Pose| -> Result<bool, String>
-    {
-        let mut seul = plan.clone();
-        seul.cameras = vec![pose.clone()];
-        let fin = calculer(&seul, catalogue, None, false, None)?;
-        return Ok(conformite(&seul, &fin)[0].conforme);
-    };
-    let mut ecarte = vec![false; candidats.len()];
-
-    // a checkpoint that asks for identification decides one camera on its own
-    // there is no room left to choose once the range is a few metres
-    for pt in &plan.points
-    {
-        if (sel.retenues.len() >= plafond)
-        {
-            break;
-        }
-        // Drawing a zone says what matters. A checkpoint left outside it no
-        // longer spends a camera, that camera goes back to the zone
-        if (!plan.zone.is_empty() && !dans_polygone(pt.x, pt.y, &plan.zone))
-        {
-            continue;
-        }
-        let ht = pt.hauteur.unwrap_or(plan.hauteur_cible);
-        loop
-        {
-            let mut meilleur: Option<(usize, usize)> = None;
-            for (i, c) in candidats.iter().enumerate()
-            {
-                if ecarte[i]
-                {
-                    continue;
-                }
-                let mut seul = plan.clone();
-                seul.cameras = vec![c.pose.clone()];
-                let modele = &catalogue[&c.pose.modele];
-                let (raison, _, rho) = diagnostiquer(&seul, modele, &c.pose, pt.x, pt.y, ht, false);
-                if (raison.is_some() || niveau(rho) < pt.requis)
-                {
-                    continue;
-                }
-                if !tient_le_budget(sel.depense, &c.pose)
-                {
-                    continue;
-                }
-                let gain = sel.gain(&c.vu);
-                if (meilleur.is_none() || gain > meilleur.unwrap().0)
-                {
-                    meilleur = Some((gain, i));
-                }
-            }
-            let i = match meilleur
-            {
-                None => break,
-                Some(x) => x.1,
-            };
-            if !tenable(&candidats[i].pose)?
-            {
-                ecarte[i] = true;
-                continue;
-            }
-            sel.retenir(&candidats[i], cellule, prix(&candidats[i].pose));
-            break;
-        }
-    }
-
-    while (sel.retenues.len() < plafond)
-    {
-        let mut meilleur: Option<(usize, usize)> = None;
-        for (i, c) in candidats.iter().enumerate()
-        {
-            if (ecarte[i] || !tient_le_budget(sel.depense, &c.pose))
-            {
-                continue;
-            }
-            let gain = sel.gain(&c.vu);
-            if (gain > 0 && (meilleur.is_none() || gain > meilleur.unwrap().0))
-            {
-                meilleur = Some((gain, i));
-            }
-        }
-        match meilleur
-        {
-            None => break,
-            Some((gain, i)) =>
-            {
-                // a camera that buys less than the threshold is one nobody should buy
-                // unless its number was imposed
-                if (r.nb_cameras.is_none() && (gain as f64) * cellule < plancher(r, &sel))
-                {
-                    break;
-                }
-                if !tenable(&candidats[i].pose)?
-                {
-                    ecarte[i] = true;
-                    continue;
-                }
-                sel.retenir(&candidats[i], cellule, prix(&candidats[i].pose));
-            },
-        }
-    }
+    let mut rech = Recherche::neuve(plan, catalogue, r, candidats, gabarit.nx * gabarit.ny);
+    rech.couvrir_points()?;
+    rech.completer_surface()?;
+    let sel = rech.sel;
 
     let mut retenues = sel.retenues;
     for (i, pose) in retenues.iter_mut().enumerate()
@@ -542,7 +590,7 @@ pub fn placer_suivi(plan: &Plan, catalogue: &HashMap<String, ModeleCamera>, r: &
         surface_m2: surface,
         cout_eur: sel.depense,
         essais: essayes,
-        candidats: candidats.len(),
+        candidats: total_candidats,
         points_tenus: tenus,
     });
 }
