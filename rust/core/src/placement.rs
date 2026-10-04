@@ -26,7 +26,9 @@ pub struct Reglages
     // middle trades one against the other. Absent, gain_minimal_m2 decides
     #[serde(default)]
     pub arbitrage: Option<f64>,
-    #[serde(default = "six")]
+    // a guard against a search that runs away, not a budget : what ends the count is
+    // a camera that stops paying for itself
+    #[serde(default = "douze")]
     pub maximum_cameras: usize,
     #[serde(default = "hauteurs_par_defaut")]
     pub hauteurs: Vec<f64>,
@@ -60,9 +62,9 @@ fn cinq() -> f64
     return 5.0;
 }
 
-fn six() -> usize
+fn douze() -> usize
 {
-    return 6;
+    return 12;
 }
 
 fn trois_dixiemes() -> f64
@@ -525,8 +527,8 @@ fn retenir_modeles(plan: &Plan, catalogue: &HashMap<String, ModeleCamera>, r: &R
 }
 
 
-// TODO the count stops at maximum_cameras, never where a camera stops paying :
-// on the sample plot the sixth still buys 10 m2 and the cap is what ends it
+// TODO at arbitrage 1 the floor is zero and the cap alone ends the count : on the sample
+// plot it stops at 12 for 95 % covered, where saturation would be the honest answer
 
 pub fn placer(plan: &Plan, catalogue: &HashMap<String, ModeleCamera>, r: &Reglages)
     -> Result<Proposition, String>
