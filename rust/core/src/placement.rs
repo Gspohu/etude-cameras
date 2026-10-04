@@ -180,24 +180,78 @@ struct Candidat
     vu: Vec<bool>,
 }
 
-// TODO the count stops at maximum_cameras, never where a camera stops paying :
-// on the sample plot the sixth still buys 10 m2 and the cap is what ends it
-
-pub fn placer(plan: &Plan, catalogue: &HashMap<String, ModeleCamera>, r: &Reglages)
-    -> Result<Proposition, String>
+// What the search has bought so far. The five fields move together on every pick, and
+// the two loops below each spelled the same five lines out : adding one more left the
+// checkpoint loop updating four of them
+struct Selection
 {
-    return placer_suivi(plan, catalogue, r, &mut |_| {});
+    acquis: Vec<bool>,
+    retenues: Vec<Pose>,
+    etapes: Vec<Etape>,
+    depense: f64,
+    // the best a single camera has bought, what the ones after it are measured against
+    reference: f64,
 }
 
-// The search runs for a minute and says nothing meanwhile, which reads as a
-// hang. `avancement` is handed the fraction done, the caller decides what to
-// show. The core knows nothing of the screen it ends up on
-pub fn placer_suivi(plan: &Plan, catalogue: &HashMap<String, ModeleCamera>, r: &Reglages,
-                    avancement: &mut dyn FnMut(f64)) -> Result<Proposition, String>
+
+impl Selection
 {
-    // An unknown IR range is an unknown night, and a datasheet nobody checked is
-    // a figure nobody stands behind. Neither is handed out on its own, naming it
-    // in modeles still brings it back
+    fn neuve(cases: usize) -> Self
+    {
+        return Selection { acquis: vec![false; cases], retenues: Vec::new(),
+                           etapes: Vec::new(), depense: 0.0, reference: 0.0 };
+    }
+
+    // ground the candidate buys that nothing already covers
+    fn gain(&self, vu: &[bool]) -> usize
+    {
+        return vu.iter().zip(self.acquis.iter()).filter(|(v, a)| **v && !**a).count();
+    }
+
+    fn retenir(&mut self, candidat: &Candidat, cellule: f64, prix: f64)
+    {
+        let apporte = self.gain(&candidat.vu) as f64 * cellule;
+        for (a, v) in self.acquis.iter_mut().zip(candidat.vu.iter())
+        {
+            *a |= *v;
+        }
+        self.depense += prix;
+        self.etapes.push(Etape { camera: format!("cam{}", self.retenues.len() + 1),
+                                 modele: candidat.pose.modele.clone(),
+                                 gain_m2: apporte,
+                                 cumul_m2: self.acquis.iter().filter(|a| **a).count() as f64
+                                           * cellule,
+                                 cout_eur: self.depense });
+        self.retenues.push(candidat.pose.clone());
+        self.reference = self.reference.max(apporte);
+    }
+}
+
+
+// What one more camera has to buy to be worth its price, as a share of the best a single
+// one bought. Nothing measures the first against, and an empty proposal reads as a plot
+// no camera can watch
+fn plancher(r: &Reglages, sel: &Selection) -> f64
+{
+    return match r.arbitrage
+    {
+        None => r.gain_minimal_m2,
+        Some(_) if sel.retenues.is_empty() => 0.0,
+        Some(a) =>
+        {
+            let reste = 1.0 - a.clamp(0.0, 1.0);
+            reste * reste * sel.reference
+        },
+    };
+}
+
+
+// An unknown IR range is an unknown night, and a datasheet nobody checked is a figure
+// nobody stands behind. Neither is handed out on its own, naming it in modeles still
+// brings it back
+fn modeles_en_lice(catalogue: &HashMap<String, ModeleCamera>, r: &Reglages)
+    -> Result<Vec<String>, String>
+{
     let mut cles: Vec<String> = if r.modeles.is_empty()
     {
         catalogue.iter().filter(|(_, m)| m.portee_ir_m.is_some() && m.verifie)
@@ -215,6 +269,17 @@ pub fn placer_suivi(plan: &Plan, catalogue: &HashMap<String, ModeleCamera>, r: &
             return Err(format!("modèle '{}' absent du catalogue", cle));
         }
     }
+    return Ok(cles);
+}
+
+
+// Every pose the supports carry, paired with each model that stays inside the boundary
+// and what each pairing sees of the ground that counts. The number of poses walked
+// through comes back with them
+fn candidats_conformes(plan: &Plan, catalogue: &HashMap<String, ModeleCamera>, r: &Reglages,
+                       cles: &[String], compte: &[bool], avancement: &mut dyn FnMut(f64))
+    -> Result<(Vec<Candidat>, usize), String>
+{
     // A virtual camera as wide as the widest field on each axis taken apart, no
     // model of the list sees past it. The widest hfov alone was wrong : vfov
     // does not follow that order, and vfov sets where the cone meets the ground
@@ -230,23 +295,6 @@ pub fn placer_suivi(plan: &Plan, catalogue: &HashMap<String, ModeleCamera>, r: &
     let mut candidats = Vec::new();
     let mut essayes = 0usize;
 
-    // What the search is paid for : the declared zone, or the whole plot when
-    // none is drawn. A camera covering ground outside it earns nothing here
-    let repere = calculer(plan, catalogue, Some(r.pas_grille), false, None)?;
-    let compte: Vec<bool> = if plan.zone.is_empty()
-    {
-        vec![true; repere.nx * repere.ny]
-    }
-    else
-    {
-        (0..repere.nx * repere.ny).map(|i|
-        {
-            let x = repere.x0 + (i % repere.nx) as f64 * repere.pas;
-            let y = repere.y0 + (i / repere.nx) as f64 * repere.pas;
-            return dans_polygone(x, y, &plan.zone);
-        }).collect()
-    };
-
     // how many poses the loops below will walk through, the cap on the height
     // of each support included
     let ancres = ancrages(plan, 1.0);
@@ -258,12 +306,8 @@ pub fn placer_suivi(plan: &Plan, catalogue: &HashMap<String, ModeleCamera>, r: &
 
     for ancrage in ancres
     {
-        for hauteur in &r.hauteurs
+        for hauteur in r.hauteurs.iter().filter(|h| **h <= ancrage.plafond)
         {
-            if (*hauteur > ancrage.plafond)
-            {
-                continue;
-            }
             for inclinaison in &r.inclinaisons
             {
                 let mut az = 0.0;
@@ -286,43 +330,88 @@ pub fn placer_suivi(plan: &Plan, catalogue: &HashMap<String, ModeleCamera>, r: &
                     {
                         continue;
                     }
-                    for cle in &cles
-                    {
-                        let mut pose = reference.clone();
-                        pose.modele = cle.clone();
-                        seul.cameras = vec![pose.clone()];
-                        let c = calculer(&seul, catalogue, Some(r.pas_grille), false, None)?;
-                        // the envelope only prunes, the model fitted here decides
-                        if !conformite(&seul, &c)[0].conforme
-                        {
-                            continue;
-                        }
-                        let vu: Vec<bool> = (0..c.nx * c.ny)
-                            .map(|i| c.utile[i] == 1 && c.rho[i] >= seuil_observer
-                                 && compte[i]).collect();
-                        if vu.iter().any(|v| *v)
-                        {
-                            candidats.push(Candidat { pose, vu });
-                        }
-                    }
+                    retenir_modeles(plan, catalogue, r, cles, compte, &reference,
+                                    seuil_observer, &mut candidats)?;
                 }
             }
         }
     }
+    return Ok((candidats, essayes));
+}
+
+
+// The envelope only prunes, the model fitted on the pose decides
+fn retenir_modeles(plan: &Plan, catalogue: &HashMap<String, ModeleCamera>, r: &Reglages,
+                   cles: &[String], compte: &[bool], reference: &Pose, seuil: f64,
+                   candidats: &mut Vec<Candidat>) -> Result<(), String>
+{
+    let mut seul = plan.clone();
+    for cle in cles
+    {
+        let mut pose = reference.clone();
+        pose.modele = cle.clone();
+        seul.cameras = vec![pose.clone()];
+        let c = calculer(&seul, catalogue, Some(r.pas_grille), false, None)?;
+        if !conformite(&seul, &c)[0].conforme
+        {
+            continue;
+        }
+        let vu: Vec<bool> = (0..c.nx * c.ny)
+            .map(|i| c.utile[i] == 1 && c.rho[i] >= seuil && compte[i]).collect();
+        if vu.iter().any(|v| *v)
+        {
+            candidats.push(Candidat { pose, vu });
+        }
+    }
+    return Ok(());
+}
+
+
+// TODO the count stops at maximum_cameras, never where a camera stops paying :
+// on the sample plot the sixth still buys 10 m2 and the cap is what ends it
+
+pub fn placer(plan: &Plan, catalogue: &HashMap<String, ModeleCamera>, r: &Reglages)
+    -> Result<Proposition, String>
+{
+    return placer_suivi(plan, catalogue, r, &mut |_| {});
+}
+
+// The search runs for a minute and says nothing meanwhile, which reads as a
+// hang. `avancement` is handed the fraction done, the caller decides what to
+// show. The core knows nothing of the screen it ends up on
+pub fn placer_suivi(plan: &Plan, catalogue: &HashMap<String, ModeleCamera>, r: &Reglages,
+                    avancement: &mut dyn FnMut(f64)) -> Result<Proposition, String>
+{
+    let cles = modeles_en_lice(catalogue, r)?;
+
+    // What the search is paid for : the declared zone, or the whole plot when
+    // none is drawn. A camera covering ground outside it earns nothing here
+    let repere = calculer(plan, catalogue, Some(r.pas_grille), false, None)?;
+    let compte: Vec<bool> = if plan.zone.is_empty()
+    {
+        vec![true; repere.nx * repere.ny]
+    }
+    else
+    {
+        (0..repere.nx * repere.ny).map(|i|
+        {
+            let x = repere.x0 + (i % repere.nx) as f64 * repere.pas;
+            let y = repere.y0 + (i / repere.nx) as f64 * repere.pas;
+            return dans_polygone(x, y, &plan.zone);
+        }).collect()
+    };
+
+    let (candidats, essayes) = candidats_conformes(plan, catalogue, r, &cles, &compte,
+                                                   avancement)?;
 
     let gabarit = calculer(plan, catalogue, Some(r.pas_grille), false, None)?;
     let cellule = r.pas_grille * r.pas_grille;
     let surface = gabarit.utile.iter().filter(|u| **u == 1).count() as f64 * cellule;
-    let mut acquis = vec![false; gabarit.nx * gabarit.ny];
-    let mut retenues: Vec<Pose> = Vec::new();
-    let mut etapes: Vec<Etape> = Vec::new();
-    let mut depense = 0.0f64;
+    // A share of the zone used to set the floor, which left the whole useful range of
+    // the slider above 0.8 : gains collapse after two cameras, and a fraction of a plot
+    // says nothing about them
+    let mut sel = Selection::neuve(gabarit.nx * gabarit.ny);
     let plafond = r.nb_cameras.unwrap_or(r.maximum_cameras);
-    // The best a single camera has bought, what the ones after it are measured
-    // against. A share of the zone was measured instead and left the whole useful
-    // range of the slider above 0.8 : gains collapse after two cameras, and a
-    // fraction of a plot says nothing about them
-    let mut reference = 0.0f64;
 
     let prix = |p: &Pose| catalogue[&p.modele].prix_eur.unwrap_or(0.0);
     let tient_le_budget = |depense: f64, p: &Pose| match r.budget_eur
@@ -346,7 +435,7 @@ pub fn placer_suivi(plan: &Plan, catalogue: &HashMap<String, ModeleCamera>, r: &
     // there is no room left to choose once the range is a few metres
     for pt in &plan.points
     {
-        if (retenues.len() >= plafond)
+        if (sel.retenues.len() >= plafond)
         {
             break;
         }
@@ -374,52 +463,41 @@ pub fn placer_suivi(plan: &Plan, catalogue: &HashMap<String, ModeleCamera>, r: &
                 {
                     continue;
                 }
-                if !tient_le_budget(depense, &c.pose)
+                if !tient_le_budget(sel.depense, &c.pose)
                 {
                     continue;
                 }
-                let gain = c.vu.iter().zip(acquis.iter()).filter(|(v, a)| **v && !**a).count();
+                let gain = sel.gain(&c.vu);
                 if (meilleur.is_none() || gain > meilleur.unwrap().0)
                 {
                     meilleur = Some((gain, i));
                 }
             }
-            let (gain, i) = match meilleur
+            let i = match meilleur
             {
                 None => break,
-                Some(x) => x,
+                Some(x) => x.1,
             };
             if !tenable(&candidats[i].pose)?
             {
                 ecarte[i] = true;
                 continue;
             }
-            for (a, v) in acquis.iter_mut().zip(candidats[i].vu.iter())
-            {
-                *a |= *v;
-            }
-            depense += prix(&candidats[i].pose);
-            etapes.push(Etape { camera: format!("cam{}", retenues.len() + 1),
-                                modele: candidats[i].pose.modele.clone(),
-                                gain_m2: gain as f64 * cellule,
-                                cumul_m2: acquis.iter().filter(|a| **a).count() as f64 * cellule,
-                                cout_eur: depense });
-            retenues.push(candidats[i].pose.clone());
-            reference = reference.max(gain as f64 * cellule);
+            sel.retenir(&candidats[i], cellule, prix(&candidats[i].pose));
             break;
         }
     }
 
-    while (retenues.len() < plafond)
+    while (sel.retenues.len() < plafond)
     {
         let mut meilleur: Option<(usize, usize)> = None;
         for (i, c) in candidats.iter().enumerate()
         {
-            if (ecarte[i] || !tient_le_budget(depense, &c.pose))
+            if (ecarte[i] || !tient_le_budget(sel.depense, &c.pose))
             {
                 continue;
             }
-            let gain = c.vu.iter().zip(acquis.iter()).filter(|(v, a)| **v && !**a).count();
+            let gain = sel.gain(&c.vu);
             if (gain > 0 && (meilleur.is_none() || gain > meilleur.unwrap().0))
             {
                 meilleur = Some((gain, i));
@@ -430,22 +508,9 @@ pub fn placer_suivi(plan: &Plan, catalogue: &HashMap<String, ModeleCamera>, r: &
             None => break,
             Some((gain, i)) =>
             {
-                let apporte = gain as f64 * cellule;
-                let plancher = match r.arbitrage
-                {
-                    None => r.gain_minimal_m2,
-                    // nothing to measure the first one against, and an empty
-                    // proposal reads as a plot no camera can watch
-                    Some(_) if retenues.is_empty() => 0.0,
-                    Some(a) =>
-                    {
-                        let reste = 1.0 - a.clamp(0.0, 1.0);
-                        reste * reste * reference
-                    },
-                };
                 // a camera that buys less than the threshold is one nobody should buy
                 // unless its number was imposed
-                if (r.nb_cameras.is_none() && apporte < plancher)
+                if (r.nb_cameras.is_none() && (gain as f64) * cellule < plancher(r, &sel))
                 {
                     break;
                 }
@@ -454,22 +519,12 @@ pub fn placer_suivi(plan: &Plan, catalogue: &HashMap<String, ModeleCamera>, r: &
                     ecarte[i] = true;
                     continue;
                 }
-                for (a, v) in acquis.iter_mut().zip(candidats[i].vu.iter())
-                {
-                    *a |= *v;
-                }
-                depense += prix(&candidats[i].pose);
-                etapes.push(Etape { camera: format!("cam{}", retenues.len() + 1),
-                                    modele: candidats[i].pose.modele.clone(),
-                                    gain_m2: apporte,
-                                    cumul_m2: acquis.iter().filter(|a| **a).count() as f64 * cellule,
-                                    cout_eur: depense });
-                retenues.push(candidats[i].pose.clone());
-                reference = reference.max(apporte);
+                sel.retenir(&candidats[i], cellule, prix(&candidats[i].pose));
             },
         }
     }
 
+    let mut retenues = sel.retenues;
     for (i, pose) in retenues.iter_mut().enumerate()
     {
         pose.nom = format!("cam{}", i + 1);
@@ -482,10 +537,10 @@ pub fn placer_suivi(plan: &Plan, catalogue: &HashMap<String, ModeleCamera>, r: &
     return Ok(Proposition
     {
         poses: retenues,
-        etapes,
-        couverture_m2: acquis.iter().filter(|a| **a).count() as f64 * cellule,
+        etapes: sel.etapes,
+        couverture_m2: sel.acquis.iter().filter(|a| **a).count() as f64 * cellule,
         surface_m2: surface,
-        cout_eur: depense,
+        cout_eur: sel.depense,
         essais: essayes,
         candidats: candidats.len(),
         points_tenus: tenus,
